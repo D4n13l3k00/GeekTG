@@ -96,6 +96,8 @@ class _CodeGate:
         return ("ok", token)
 
     def consume(self, presented: str) -> bool:
+        """Validate the token. Stays usable until ``expires`` — not one-shot,
+        so a flaky download / retry within the 60-second window works."""
         slot = self._token
         if slot is None:
             return False
@@ -104,7 +106,6 @@ class _CodeGate:
             return False
         if not presented or not secrets.compare_digest(presented, slot["token"]):
             return False
-        self._token = None  # one-shot
         return True
 
 
