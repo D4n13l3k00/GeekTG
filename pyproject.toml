@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "friendly-telegram"
+version = "3.1.25"
+description = "GeekTG-flavoured Friendly Telegram userbot"
+readme = "README.md"
+license = { text = "AGPL-3.0-or-later" }
+requires-python = ">=3.8"
+authors = [{ name = "GeekTG Team" }]
+keywords = ["telegram", "userbot", "telethon"]
+classifiers = [
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Communications :: Chat",
+]
+
+dependencies = [
+    "Telethon>=1.40,<2",
+    "pythondialog>=3.5.3",
+    "gitpython>=3.1.27",
+    "babel>=2.9.1",
+    "meval>=2.5",
+    "aiohttp_jinja2>=1.5",
+    "aiohttp",
+    "Jinja2>=3.1.2",
+    "requests>=2.28.0",
+    "aiogram>=2.21,<3",
+]
+
+[project.scripts]
+gtg = "friendly_telegram.__main__:_cli"
+friendly-telegram = "friendly_telegram.__main__:_cli"
+
+[project.urls]
+Homepage = "https://github.com/GeekTG/Friendly-Telegram"
+Source = "https://github.com/GeekTG/Friendly-Telegram"
+
+[tool.hatch.build]
+# Don't let .gitignore (which excludes runtime data dirs like
+# translations/ and *.png) strip files that ship with the package.
+ignore-vcs = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["friendly_telegram"]
+include = [
+    "friendly_telegram/**/*.py",
+    "friendly_telegram/**/*.jinja2",
+    "friendly_telegram/web/static/**",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "friendly_telegram/",
+    "docs/",
+    "README.md",
+    "LICENSE",
+]

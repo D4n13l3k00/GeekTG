@@ -1,0 +1,222 @@
+{% extends "base.jinja2" %}
+{% block title %}GeekTG — работает{% endblock %}
+
+{% block head %}
+<style>
+  .profile {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    background: rgba(12,14,19,.6);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    margin: 16px 0 4px;
+    opacity: 0;
+    animation: fade-in .4s .1s ease-out forwards;
+  }
+  @keyframes fade-in { to { opacity: 1; } }
+
+  .profile .avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), #b452ff);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 22px;
+    overflow: hidden;
+    object-fit: cover;
+  }
+  .profile .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .profile .info {
+    flex: 1;
+    min-width: 0;
+  }
+  .profile .name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .profile .name .premium {
+    color: #f59e0b;
+    font-size: 13px;
+  }
+  .profile .meta {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 2px;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+  .profile .bio {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.45;
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .profile .skeleton {
+    background: linear-gradient(90deg, #1a1d27 25%, #232735 50%, #1a1d27 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: 4px;
+  }
+  .profile .skeleton.line { height: 12px; margin: 4px 0; }
+  .profile .skeleton.line.short { width: 40%; }
+  .profile .skeleton.line.long  { width: 70%; }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="logo">
+    <img src="/static/bot_avatar.png" alt="">
+    <h1>GeekTG</h1>
+  </div>
+
+  <span class="status-badge">Бот запущен</span>
+  <h2>Всё готово</h2>
+
+  <div class="profile" id="profile">
+    <div class="avatar" id="avatar">?</div>
+    <div class="info">
+      <div class="name"><div class="skeleton line short"></div></div>
+      <div class="meta"><div class="skeleton line long"></div></div>
+    </div>
+  </div>
+
+  <p class="hint">
+    Управляйте юзерботом прямо из Telegram — отправьте себе команду
+    <code>.help</code>, чтобы увидеть список доступных модулей.
+  </p>
+
+  <a class="btn" id="btn-saved" href="#" target="_blank" rel="noopener">
+    💬 Открыть «Избранное»
+  </a>
+  <button class="btn secondary" id="btn-restart">Перезапустить</button>
+
+  <p class="footer">
+    Если что-то пошло не так — проверьте логи и попробуйте перезапустить.
+  </p>
+</div>
+{% endblock %}
+
+{% block after %}
+<script>
+  const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+
+  async function loadProfile() {
+    try {
+      const r = await fetch('/me');
+      if (!r.ok) throw new Error(r.status);
+      const me = await r.json();
+      renderProfile(me);
+    } catch (_) {
+      document.getElementById('profile').style.display = 'none';
+    }
+  }
+
+  function setupSavedLink(me) {
+    // Saved Messages = chat with self. tg:// deeplink opens it natively in
+    // any installed Telegram client. The visible href is the deeplink; the
+    // click handler additionally opens t.me as a fallback for browsers
+    // without the protocol handler (typically when no client is installed).
+    const link = document.getElementById('btn-saved');
+    const deeplink = `tg://openmessage?user_id=${me.id}`;
+    const fallback = me.username ? `https://t.me/${me.username}` : null;
+    link.href = deeplink;
+    link.onclick = (e) => {
+      if (!fallback) return;
+      e.preventDefault();
+      window.location.href = deeplink;
+      // If the deeplink isn't handled, try t.me after a short delay.
+      setTimeout(() => window.open(fallback, '_blank', 'noopener'), 600);
+    };
+  }
+
+  function renderProfile(me) {
+    const fullName = [me.first_name, me.last_name].filter(Boolean).join(' ').trim()
+                  || me.username || 'Аккаунт';
+    const initial = (fullName.match(/\S/) || ['?'])[0].toUpperCase();
+    const username = me.username ? '@' + me.username : '';
+    const meta = [username, me.phone].filter(Boolean).join(' · ');
+    const premium = me.premium ? '<span class="premium" title="Telegram Premium">★</span>' : '';
+
+    const avatarBox = document.getElementById('avatar');
+    if (me.has_avatar) {
+      const img = new Image();
+      img.onload = () => { avatarBox.innerHTML = ''; avatarBox.appendChild(img); };
+      img.onerror = () => { avatarBox.textContent = initial; };
+      img.src = '/me/avatar';
+      img.alt = '';
+    } else {
+      avatarBox.textContent = initial;
+    }
+
+    const info = document.querySelector('#profile .info');
+    info.innerHTML =
+      '<div class="name">' + escapeHtml(fullName) + premium + '</div>' +
+      (meta ? '<div class="meta">' + escapeHtml(meta) + '</div>' : '') +
+      (me.bio ? '<div class="bio">' + escapeHtml(me.bio) + '</div>' : '');
+
+    setupSavedLink(me);
+  }
+
+  loadProfile();
+
+  document.getElementById('btn-restart').onclick = async () => {
+    const { isConfirmed } = await Swal.fire({
+      title: 'Перезапустить юзербот?',
+      text: 'Это займёт несколько секунд.',
+      showCancelButton: true,
+      confirmButtonText: 'Перезапустить',
+      cancelButtonText: 'Отмена',
+    });
+    if (!isConfirmed) return;
+    try {
+      await fetch('/restart', {method: 'POST'});
+    } catch (_) { /* expected: server is restarting */ }
+
+    Swal.fire({
+      title: 'Перезапуск…',
+      text: 'Страница обновится автоматически.',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    const poll = setInterval(async () => {
+      try {
+        const r = await fetch('/is_restart_complete', {method: 'GET'});
+        if (r.ok) {
+          clearInterval(poll);
+          location.reload();
+        }
+      } catch (_) {}
+    }, 1500);
+  };
+</script>
+{% endblock %}

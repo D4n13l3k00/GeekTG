@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+{% set title_s %}{% block title %}GeekTG{% endblock %}{% endset %}
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title_s }}</title>
+    <link rel="icon" href="/static/bot_avatar.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --card: #161922;
+        --card-border: #232735;
+        --text: #e8eaee;
+        --muted: #9aa1ad;
+        --accent: #4f9dff;
+        --accent-hover: #6bafff;
+        --error: #ef4444;
+        --success: #22c55e;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        position: relative;
+      }
+
+      /* Animated aurora background — three blurred blobs drifting on a loop. */
+      .aurora {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .aurora::before,
+      .aurora::after,
+      .aurora span {
+        content: "";
+        position: absolute;
+        width: 60vmax;
+        height: 60vmax;
+        border-radius: 50%;
+        filter: blur(90px);
+        opacity: .35;
+        will-change: transform;
+      }
+      .aurora::before {
+        background: radial-gradient(circle, #4f9dff 0%, transparent 60%);
+        top: -25vmax; left: -20vmax;
+        animation: drift1 22s ease-in-out infinite alternate;
+      }
+      .aurora::after {
+        background: radial-gradient(circle, #b452ff 0%, transparent 60%);
+        bottom: -25vmax; right: -20vmax;
+        animation: drift2 26s ease-in-out infinite alternate;
+      }
+      .aurora span {
+        background: radial-gradient(circle, #22c55e 0%, transparent 60%);
+        top: 30%; left: 40%;
+        opacity: .22;
+        animation: drift3 30s ease-in-out infinite alternate;
+      }
+      @keyframes drift1 {
+        0%   { transform: translate(0, 0) scale(1); }
+        100% { transform: translate(30vw, 20vh) scale(1.15); }
+      }
+      @keyframes drift2 {
+        0%   { transform: translate(0, 0) scale(1); }
+        100% { transform: translate(-25vw, -15vh) scale(1.1); }
+      }
+      @keyframes drift3 {
+        0%   { transform: translate(0, 0) scale(.9); }
+        100% { transform: translate(-15vw, 25vh) scale(1.2); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .aurora::before, .aurora::after, .aurora span { animation: none; }
+        .step, .card { animation: none !important; transition: none !important; }
+      }
+
+      .card {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 460px;
+        background: rgba(22, 25, 34, .72);
+        backdrop-filter: blur(24px) saturate(150%);
+        -webkit-backdrop-filter: blur(24px) saturate(150%);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 32px 28px;
+        box-shadow: 0 20px 60px rgba(0,0,0,.5);
+        animation: card-in .55s cubic-bezier(.2,.8,.2,1) both;
+      }
+      @keyframes card-in {
+        from { opacity: 0; transform: translateY(14px) scale(.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      /* Step transitions for the wizard. */
+      .step {
+        animation: step-in .35s cubic-bezier(.2,.8,.2,1) both;
+      }
+      .step.leaving {
+        animation: step-out .25s cubic-bezier(.4,0,.4,1) both;
+      }
+      @keyframes step-in {
+        from { opacity: 0; transform: translateX(16px); }
+        to   { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes step-out {
+        from { opacity: 1; transform: translateX(0); }
+        to   { opacity: 0; transform: translateX(-16px); }
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .logo img {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+      }
+      .logo h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .step-indicator {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
+      h2 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        font-weight: 600;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+        margin: 0 0 20px;
+      }
+      .hint a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .hint a:hover { text-decoration: underline; }
+      label {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+      input[type="text"], input[type="tel"], input[type="password"], input[type="number"] {
+        width: 100%;
+        background: #0c0e13;
+        border: 1px solid var(--card-border);
+        border-radius: 10px;
+        color: var(--text);
+        padding: 12px 14px;
+        font-size: 15px;
+        font-family: inherit;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+      }
+      input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(79,157,255,.15);
+      }
+      input.error {
+        border-color: var(--error);
+        box-shadow: 0 0 0 3px rgba(239,68,68,.15);
+      }
+      .field { margin-bottom: 14px; }
+      .btn {
+        display: block;
+        width: 100%;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        padding: 13px 20px;
+        font-size: 15px;
+        font-weight: 600;
+        text-align: center;
+        text-decoration: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background .15s ease, transform .05s ease;
+        margin-top: 8px;
+      }
+      a.btn { line-height: 1.2; }
+      .btn:hover:not(:disabled) { background: var(--accent-hover); }
+      .btn:active:not(:disabled) { transform: translateY(1px); }
+      .btn:disabled { opacity: .5; cursor: not-allowed; }
+      .btn.secondary {
+        background: transparent;
+        border: 1px solid var(--card-border);
+        color: var(--text);
+      }
+      .btn.secondary:hover:not(:disabled) {
+        background: #1d2230;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 12px;
+        color: var(--muted);
+        text-align: center;
+        line-height: 1.5;
+      }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(34,197,94,.1);
+        color: var(--success);
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 12px;
+      }
+      .status-badge::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success);
+        box-shadow: 0 0 8px var(--success);
+      }
+
+      /* ===== SweetAlert dark theme override ===== */
+      .swal2-container { backdrop-filter: blur(4px); }
+      .swal2-popup.swal2-modal {
+        background: rgba(22, 25, 34, .92) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--card-border);
+        border-radius: 16px !important;
+        font-family: 'Inter', sans-serif !important;
+        box-shadow: 0 30px 80px rgba(0,0,0,.6);
+        max-width: 90vw;
+        width: 420px !important;
+      }
+      .swal2-title {
+        color: var(--text) !important;
+        font-size: 20px !important;
+        font-weight: 600 !important;
+      }
+      .swal2-html-container {
+        color: var(--muted) !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+      }
+      .swal2-popup .swal2-input,
+      .swal2-popup .swal2-textarea,
+      .swal2-popup .swal2-select,
+      .swal2-popup .swal2-file {
+        box-sizing: border-box !important;
+        background: #0c0e13 !important;
+        border: 1px solid var(--card-border) !important;
+        color: var(--text) !important;
+        border-radius: 10px !important;
+        font-family: inherit !important;
+        font-size: 15px !important;
+        height: auto !important;
+        padding: 12px 14px !important;
+        margin: 12px auto !important;
+        width: calc(100% - 3em) !important;
+        max-width: calc(100% - 3em) !important;
+        box-shadow: none !important;
+        transition: border-color .15s ease, box-shadow .15s ease;
+      }
+      .swal2-input:focus {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px rgba(79,157,255,.15) !important;
+      }
+      .swal2-validation-message {
+        background: rgba(239,68,68,.12) !important;
+        color: var(--error) !important;
+        border-radius: 10px;
+      }
+      .swal2-actions { gap: 8px; }
+      .swal2-styled.swal2-confirm {
+        background: var(--accent) !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        padding: 10px 22px !important;
+        box-shadow: none !important;
+      }
+      .swal2-styled.swal2-confirm:hover { background: var(--accent-hover) !important; }
+      .swal2-styled.swal2-cancel {
+        background: transparent !important;
+        border: 1px solid var(--card-border) !important;
+        color: var(--text) !important;
+        border-radius: 10px !important;
+        font-weight: 500 !important;
+        padding: 10px 22px !important;
+      }
+      .swal2-styled.swal2-cancel:hover { background: #1d2230 !important; }
+      .swal2-icon { border-color: currentColor !important; }
+      .swal2-icon.swal2-success { color: var(--success) !important; }
+      .swal2-icon.swal2-success [class^="swal2-success-line"] { background: var(--success) !important; }
+      .swal2-icon.swal2-error { color: var(--error) !important; }
+      .swal2-icon.swal2-error [class^="swal2-x-mark-line"] { background: var(--error) !important; }
+      .swal2-icon.swal2-warning { color: #f59e0b !important; }
+      .swal2-icon.swal2-info { color: var(--accent) !important; }
+      .swal2-loader { border-color: var(--accent) transparent var(--accent) transparent !important; }
+    </style>
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <div class="aurora" aria-hidden="true"><span></span></div>
+    {% block content %}{% endblock %}
+    {% block after %}{% endblock %}
+  </body>
+</html>

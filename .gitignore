@@ -1,29 +1,39 @@
-*__pycache__
+# Build & runtime junk
+__pycache__/
 *.pyc
-friendly-telegram/api_token.py
-friendly-telegram/FTG-Modules
-friendly-telegram/loaded_modules
-friendly-telegram*.session*
-database-*.json
 *.swp
-.setup_complete
 .tox
-.idea/
-venv/
-data/
-mishase_cache/
-translations/
-api_token.txt
 .coverage
+.cache
+.idea/
 .vscode/
+venv/
+.venv/
+.venv-test/
+dist/
+build/
+*.egg-info/
+
+# User data — must never be committed
+api_token.txt
+friendly-telegram*.session*
+config.json
+config-*.json
+database-*.json
+*cache*.json
+loaded_modules/
+data/
+
+# Legacy install/bootstrap artefacts
+.setup_complete
 ftg-install.log
 config.ini
-.cache
-config-*.json
-config.json
-*cache*.json
+
+# Binary media (legacy ignore from old repo layout). The bundled web
+# avatar is whitelisted explicitly.
 *.png
 *.jpg
 *.jpeg
 *.webp
 *.webm
+!friendly_telegram/web/static/**

@@ -1,0 +1,224 @@
+{% extends "base.jinja2" %}
+{% block title %}Настройка GeekTG{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="logo">
+    <img src="/static/bot_avatar.png" alt="">
+    <h1>GeekTG</h1>
+  </div>
+
+  <!-- STEP 1: welcome -->
+  <div class="step" id="step-welcome">
+    <h2>Добро пожаловать 👋</h2>
+    <p class="hint">
+      Сейчас мы подключим ваш Telegram-аккаунт к юзерботу.
+      Это займёт около минуты. Вам понадобятся <b>API-ключи</b> и доступ
+      к Telegram, чтобы получить код подтверждения.
+    </p>
+    <button class="btn" id="btn-start">Начать</button>
+    <p class="footer">
+      Сессия хранится локально. Никто, кроме вас, не получит доступ к аккаунту.
+    </p>
+  </div>
+
+  <!-- STEP 2: api credentials -->
+  <div class="step" id="step-api" hidden>
+    <div class="step-indicator">Шаг 1 из 2</div>
+    <h2>API-ключи Telegram</h2>
+    <p class="hint">
+      Откройте <a href="https://my.telegram.org/apps" target="_blank" rel="noopener">my.telegram.org/apps</a>,
+      войдите по номеру телефона и создайте приложение (любое название и платформа).
+      Скопируйте оттуда <b>App api_id</b> и <b>App api_hash</b>.
+    </p>
+    <div class="field">
+      <label for="api_id">api_id</label>
+      <input type="number" id="api_id" placeholder="например, 1234567" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="api_hash">api_hash</label>
+      <input type="text" id="api_hash" placeholder="32 символа из my.telegram.org" autocomplete="off">
+    </div>
+    <button class="btn" id="btn-api">Продолжить</button>
+  </div>
+
+  <!-- STEP 3: phone -->
+  <div class="step" id="step-phone" hidden>
+    <div class="step-indicator">Шаг 2 из 2</div>
+    <h2>Номер телефона</h2>
+    <p class="hint">
+      Введите номер вашего Telegram-аккаунта в международном формате.
+      Код придёт в чат <b>Telegram</b> (если у вас есть другая активная
+      сессия) или в <b>SMS</b>.
+    </p>
+    <div class="field">
+      <label for="phone">Номер телефона</label>
+      <input type="tel" id="phone" placeholder="+79991234567" autocomplete="tel">
+    </div>
+    <button class="btn" id="btn-phone">Отправить код</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block after %}
+<script>
+  const $ = (id) => document.getElementById(id);
+  const show = (id) => {
+    const target = $(id);
+    const current = document.querySelector('.step:not([hidden])');
+    if (current === target) return;
+    if (!current) { target.hidden = false; return; }
+    current.classList.add('leaving');
+    current.addEventListener('animationend', function once() {
+      current.removeEventListener('animationend', once);
+      current.classList.remove('leaving');
+      current.hidden = true;
+      target.hidden = false;
+    }, { once: true });
+  };
+  const flashError = (input) => {
+    input.classList.add('error');
+    setTimeout(() => input.classList.remove('error'), 1200);
+    input.focus();
+  };
+  const setBusy = (btn, busy, label) => {
+    btn.disabled = busy;
+    if (label) btn.textContent = label;
+  };
+
+  let phoneNumber = '';
+  let codeAttempt = '';
+
+  $('btn-start').onclick = () => show('step-api');
+
+  $('btn-api').onclick = async () => {
+    const idEl = $('api_id'), hashEl = $('api_hash');
+    const apiId = idEl.value.trim();
+    const apiHash = hashEl.value.trim();
+    if (!apiId || isNaN(parseInt(apiId)) || parseInt(apiId) < 1) {
+      return flashError(idEl);
+    }
+    if (apiHash.length !== 32) {
+      return flashError(hashEl);
+    }
+    const btn = $('btn-api');
+    setBusy(btn, true, 'Сохранение…');
+    try {
+      const r = await fetch('/setApi', {
+        method: 'PUT',
+        body: apiHash + apiId,
+        credentials: 'include',
+      });
+      if (!r.ok) throw new Error(r.status);
+      show('step-phone');
+    } catch (e) {
+      Swal.fire({icon: 'error', title: 'Не удалось сохранить ключи',
+                 text: 'Проверьте api_id и api_hash и попробуйте снова.'});
+    } finally {
+      setBusy(btn, false, 'Продолжить');
+    }
+  };
+
+  const phoneRe = /^\+?\d{10,14}$/;
+  $('btn-phone').onclick = async () => {
+    const phoneEl = $('phone');
+    const phone = phoneEl.value.trim();
+    if (!phoneRe.test(phone)) return flashError(phoneEl);
+    phoneNumber = phone;
+    const btn = $('btn-phone');
+    setBusy(btn, true, 'Отправка кода…');
+    try {
+      const r = await fetch('/sendTgCode', {method: 'POST', body: phone, credentials: 'include'});
+      if (r.ok) return askForCode();
+
+      const reason = (await r.text()) || '';
+      const messages = {
+        api_invalid:  'Неверные api_id / api_hash. Вернитесь и проверьте ключи.',
+        phone_invalid:'Telegram считает номер некорректным. Введите в формате +7…',
+        phone_banned: 'Этот номер заблокирован Telegram.',
+      };
+      let msg = messages[reason];
+      if (!msg && reason.startsWith('flood_wait:')) {
+        const sec = reason.split(':')[1] || '?';
+        msg = `Слишком много попыток. Подождите ${sec} сек и попробуйте снова.`;
+      }
+      Swal.fire({
+        icon: 'error',
+        title: 'Не удалось отправить код',
+        text: msg || 'Telegram отклонил запрос. Подробности в логах юзербота.',
+      });
+    } catch (e) {
+      Swal.fire({icon: 'error', title: 'Сервер недоступен',
+                 text: 'Проверьте, что юзербот запущен.'});
+    } finally {
+      setBusy(btn, false, 'Отправить код');
+    }
+  };
+
+  async function askForCode() {
+    const { value: code, isConfirmed } = await Swal.fire({
+      title: 'Код подтверждения',
+      html: 'Telegram отправил код &mdash; проверьте чат <b>Telegram</b> '
+          + '(если у вас есть другая сессия) либо <b>SMS</b> на телефон.',
+      input: 'text',
+      inputAttributes: { autocapitalize: 'off', inputmode: 'numeric', maxlength: 6 },
+      inputPlaceholder: '5–6 цифр',
+      inputValidator: (v) => {
+        if (!/^\d{5,6}$/.test(v || '')) return 'Введите 5 или 6 цифр.';
+      },
+      confirmButtonText: 'Войти',
+      showCancelButton: true,
+      cancelButtonText: 'Отмена',
+      allowOutsideClick: false,
+    });
+    if (!isConfirmed || !code) return;
+    codeAttempt = code;
+    await submitCode('');
+  }
+
+  async function ask2FA(invalid) {
+    const { value: pwd, isConfirmed } = await Swal.fire({
+      title: 'Облачный пароль (2FA)',
+      text: invalid ? 'Пароль не подошёл, попробуйте ещё раз.' : 'У вас включена двухфакторная аутентификация. Введите пароль.',
+      input: 'password',
+      confirmButtonText: 'Войти',
+      showCancelButton: true,
+      cancelButtonText: 'Отмена',
+      allowOutsideClick: false,
+    });
+    if (!isConfirmed || !pwd) return;
+    await submitCode(pwd);
+  }
+
+  async function submitCode(pwd) {
+    const r = await fetch('/tgCode', {
+      method: 'POST',
+      body: codeAttempt + '\n' + phoneNumber + '\n' + pwd,
+    });
+    if (r.ok) return finishLogin();
+    if (r.status === 401) return ask2FA(false);
+    if (r.status === 403) {
+      if (pwd) return ask2FA(true);
+      Swal.fire({icon: 'error', title: 'Неверный код'});
+      return askForCode();
+    }
+    if (r.status === 404) {
+      Swal.fire({icon: 'warning', title: 'Код устарел',
+                 text: 'Запросите новый код.'});
+      return;
+    }
+    Swal.fire({icon: 'error', title: 'Ошибка сервера',
+               text: 'Попробуйте перезапустить настройку.'});
+  }
+
+  async function finishLogin() {
+    const r = await fetch('/finishLogin', {method: 'POST', body: '', credentials: 'include'});
+    if (!r.ok) {
+      Swal.fire({icon: 'error', title: 'Не удалось завершить вход'});
+      return;
+    }
+    await Swal.fire({icon: 'success', title: 'Готово!', text: 'Вход выполнен.', timer: 1500, showConfirmButton: false});
+    location.reload();
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,29 @@
+services:
+  gtg:
+    build: .
+    image: geektg/friendly-telegram:latest
+    container_name: gtg
+    restart: unless-stopped
+    stdin_open: true   # нужен для интерактивного логина (ввод кода/пароля)
+    tty: true
+
+    # Web UI (initial setup, lavhost-style мониторинг). 8888 = --port в Dockerfile.
+    ports:
+      - "8888:8888"
+
+    environment:
+      # При желании зафиксировать data-dir вручную:
+      # GTG_DATA_DIR: /data
+      TZ: Europe/Moscow
+
+    volumes:
+      # Все runtime-данные: сессии Telethon, config.json, api_token.txt,
+      # loaded_modules/, sqlite кеш — один том, легко бэкапить.
+      - gtg-data:/home/ftg/.local/share/friendly-telegram
+
+      # Опционально: пробросить токены/конфиг с хоста, чтобы первый старт
+      # не требовал веб-сетапа. Закомментировано — раскомментируй при нужде.
+      # - ./api_token.txt:/home/ftg/.local/share/friendly-telegram/api_token.txt:ro
+
+volumes:
+  gtg-data:
