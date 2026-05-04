@@ -25,7 +25,7 @@ _RESOURCE_CACHE_TTL = 3.0
 _BACKUP_EXCLUDE_SUFFIXES = (".session-journal",)
 _RESTORE_MAX_BYTES = 64 * 1024 * 1024  # 64 MiB hard limit on uploads
 _BACKUP_CODE_TTL = 300                 # 5 min — TG-delivered code lifetime
-_BACKUP_TOKEN_TTL = 60                 # one-shot download window after confirm
+_BACKUP_TOKEN_TTL = 300                # action-token window after confirm (5 min)
 
 
 def _try_psutil():
