@@ -21,9 +21,16 @@ services:
       # loaded_modules/, sqlite кеш — один том, легко бэкапить.
       - gtg-data:/home/ftg/.local/share/friendly-telegram
 
+      # Питон-venv. Хранит зависимости стороних модулей (через `# requires:`),
+      # переживает `docker compose up --build`. На первом запуске entrypoint
+      # засеет его из /opt/gtg-venv, на каждом старте `uv sync --frozen`
+      # подравняет под pyproject.toml/uv.lock.
+      - gtg-venv:/home/ftg/.venv
+
       # Опционально: пробросить токены/конфиг с хоста, чтобы первый старт
       # не требовал веб-сетапа. Закомментировано — раскомментируй при нужде.
       # - ./api_token.txt:/home/ftg/.local/share/friendly-telegram/api_token.txt:ro
 
 volumes:
   gtg-data:
+  gtg-venv:

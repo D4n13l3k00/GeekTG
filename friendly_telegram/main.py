@@ -100,25 +100,22 @@ save_config_key("use_fs_for_modules", get_config_key("use_fs_for_modules"))
 
 
 def gen_port():
+    """Pick a port: persisted one from config, else a random free one.
+
+    Only invoked when the user did NOT pass ``--port`` (see
+    ``parse_arguments``) — historically this ran on every startup as an
+    eagerly-evaluated argparse default and uselessly hit the loopback
+    listener for free-port detection.
+    """
     port = get_config_key("port")
     if port:
         return port
 
-    # If we didn't get port from config, generate new one
-    # First, try to randomly get port
-    port = random.randint(1024, 65536)
-
-    # Then ensure it's free
-    while (
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect_ex(
-            ("localhost", port)
-        )
-        == 0
-    ):
-        # Until we find the free port, generate new one
-        port = random.randint(1024, 65536)
-
-    return port
+    while True:
+        port = random.randint(1024, 65535)  # 65535 is the last valid port
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("localhost", port)) != 0:
+                return port
 
 
 def save_db_type(use_file_db):
@@ -130,7 +127,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--setup", "-s", action="store_true")
     parser.add_argument(
-        "--port", dest="port", action="store", default=gen_port(), type=int
+        "--port", dest="port", action="store", default=None, type=int,
+        help="Web port (default: random free port, persisted in config.json)",
     )
     parser.add_argument("--phone", "-p", action="append")
     parser.add_argument("--token", "-t", action="append", dest="tokens")
@@ -322,6 +320,20 @@ class SuperList(list):
         return [getattr(c, attr) for c in self]
 
 
+async def _announce_web_ready(web):
+    """Print reachable web URLs once the web UI has finished initializing.
+
+    Cancellation-safe: returns silently if cancelled before the event fires
+    (typical when shutdown happens before the last client logs in).
+    """
+    try:
+        await web.ready.wait()
+    except asyncio.CancelledError:
+        return
+    print()
+    utils.print_web_urls(web.port)
+
+
 async def _async_main(arguments):  # noqa: C901
     """Async core of :func:`main`."""
     clients = SuperList()
@@ -345,6 +357,8 @@ async def _async_main(arguments):  # noqa: C901
     else:
         web = None
 
+    if arguments.port is None:
+        arguments.port = gen_port()
     save_config_key("port", arguments.port)
 
     while api_token is None:
@@ -482,6 +496,12 @@ async def _async_main(arguments):  # noqa: C901
         return_exceptions=True,
     )
     waiter = asyncio.create_task(stop.wait())
+    # Announce reachable URLs once the web UI is fully ready (i.e. after the
+    # last client logs in). The setup-time print fires only on first-run /
+    # missing-session paths; this one always fires for normal startups.
+    announce = (
+        asyncio.create_task(_announce_web_ready(web)) if web is not None else None
+    )
     try:
         done, _ = await asyncio.wait(
             {runners, waiter},
@@ -495,6 +515,8 @@ async def _async_main(arguments):  # noqa: C901
         pass
     finally:
         waiter.cancel()
+        if announce is not None:
+            announce.cancel()
         runners.cancel()
         # Drain runners so their CancelledError doesn't leak as "Task was
         # destroyed but it is pending!" warnings.
@@ -662,42 +684,18 @@ async def amain(first, client, allclients, web, arguments):
     await modules.send_ready(client, db, allclients)
 
     if first:
-        # Optional commit SHA — only available when running from a git
-        # checkout. Wheel/Docker installs never have ``.git`` and that's
-        # fine, just skip the build line silently.
-        build = ""
-        try:
-            import git
-            repo = git.Repo(search_parent_directories=True)
-            build = repo.head.commit.hexsha
-        except Exception:
-            logging.debug("git.Repo() unavailable — running outside a checkout")
-
-        version = ".".join(map(str, __version__))
-        _platform = utils.get_platform_name()
+        # One info-level line per client. The data dir / version / platform
+        # banner already printed by ``_print_startup_banner`` before login
+        # covers the rest. Build SHA is shown only when actually available
+        # (git checkout) — wheel/Docker installs skip it silently.
         me = await client.get_me(True)
-
-        build_line = f"                     • Build: {build[:7]}\n" if build else ""
-        logo1 = f"""
-                                      )
-                   (               ( /(
-                   ) )   (   (    )())
-                  (()/(   )  ) |((_)
-                   /((_)_((_)((_)|_((_)
-                  (_)/ __| __| __| |/ /
-                    | (_ | _|| _|  ' <
-                      ___|___|___|_|_\\
-
-{build_line}                     • Version: {version}
-                     • Platform: {_platform}
-                     - Started for {me.user_id} -"""
-
-        print(logo1)
-
-        if build:
-            logging.info("=== BUILD: %s ===", build)
-        logging.info("=== VERSION: %s ===", version)
-        logging.info("=== PLATFORM: %s ===", _platform)
+        version = ".".join(map(str, __version__))
+        sha, _ = utils.get_git_info()
+        build = f" build {sha[:7]}" if sha else ""
+        logging.info(
+            "🚀 GeekTG %s%s ready for user %d on %s",
+            version, build, me.user_id, utils.get_platform_name(),
+        )
 
     await client.run_until_disconnected()
 

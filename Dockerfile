@@ -33,23 +33,38 @@ WORKDIR /home/ftg
 COPY --chown=ftg:ftg . /home/ftg
 USER ftg
 
-# uv-managed venv. ``uv sync`` reads pyproject.toml + uv.lock, installs the
-# exact pinned versions, and pre-creates ``/home/ftg/.venv``. Putting it
-# first on PATH makes ``gtg`` and ``python`` resolve into the venv without
-# any activation step.
+# Two venv locations:
+#   /opt/gtg-venv  — immutable seed baked into the image
+#   /home/ftg/.venv — runtime venv (a Docker volume, persists across rebuilds)
+#
+# Building only the seed and copying it into the volume on first start lets
+# packages installed at runtime (e.g. by .loadmod's "# requires:" auto-
+# installer) survive ``docker compose up --build``.
 ENV VIRTUAL_ENV=/home/ftg/.venv \
     UV_PROJECT_ENVIRONMENT=/home/ftg/.venv \
     PATH="/home/ftg/.venv/bin:${PATH}"
 
-RUN uv sync --frozen --no-dev \
- && uv pip install Pillow pydub ffmpeg-python wand moviepy numpy
+USER root
+RUN install -d -o ftg -g ftg /opt/gtg-venv
+USER ftg
+
+RUN UV_PROJECT_ENVIRONMENT=/opt/gtg-venv uv sync --frozen --no-dev \
+ && uv pip install --python /opt/gtg-venv/bin/python \
+        Pillow pydub ffmpeg-python wand moviepy numpy
 
 # Pre-create the data tree owned by ``ftg`` so a named volume mounted on top
 # inherits its ownership on first use. Without this, Docker creates the
 # mount point as root and the bot can't write loaded_modules / sessions.
 RUN mkdir -p /home/ftg/.local/share/friendly-telegram/loaded_modules \
-             /home/ftg/.local/share/friendly-telegram/assets
+             /home/ftg/.local/share/friendly-telegram/assets \
+             /home/ftg/.venv
+
+COPY --chown=ftg:ftg docker/entrypoint.sh /usr/local/bin/gtg-entrypoint
+USER root
+RUN chmod +x /usr/local/bin/gtg-entrypoint
+USER ftg
 
 EXPOSE 8888
 
-ENTRYPOINT ["gtg", "--port", "8888"]
+ENTRYPOINT ["gtg-entrypoint"]
+CMD ["gtg", "--port", "8888"]

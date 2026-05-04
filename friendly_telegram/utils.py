@@ -39,8 +39,6 @@ from telethon.tl.types import (
     MessageMediaWebPage,
 )
 
-import git
-
 from . import __version__
 
 
@@ -136,16 +134,18 @@ def get_version_raw():
 
 
 def get_git_info():
+    # Lazy import: ``gitpython`` is only needed for the startup banner /
+    # ``.info`` and is a meaningful chunk of import time. Wheel/Docker
+    # installs don't have ``.git`` anyway and end up in the except path.
     try:
-        repo = git.Repo()
-        ver = repo.heads[0].commit.hexsha
+        import git
+        repo = git.Repo(search_parent_directories=True)
+        ver = repo.head.commit.hexsha
     except Exception:
         ver = ""
     return [
         ver,
-        f"https://github.com/GeekTG/Friendly-Telegram/commit/{ver}"
-        if ver
-        else "",
+        f"https://github.com/D4n13l3k00/GeekTG/commit/{ver}" if ver else "",
     ]
 
 
@@ -178,6 +178,7 @@ def get_dir(mod):
     return os.path.abspath(os.path.dirname(os.path.abspath(mod)))
 
 
+@functools.lru_cache(maxsize=1)
 def get_data_dir():
     """Return user-writable data directory for sessions, config and modules.
 
@@ -185,6 +186,10 @@ def get_data_dir():
       1. ``$GTG_DATA_DIR`` (or legacy ``$FTG_DATA_DIR``) if set
       2. ``$XDG_DATA_HOME/friendly-telegram`` (default
          ``~/.local/share/friendly-telegram``)
+
+    Cached: the result is constant for a given process. The first call
+    creates the directory; subsequent ones just return the cached path
+    without any syscalls.
     """
     override = os.environ.get("GTG_DATA_DIR") or os.environ.get("FTG_DATA_DIR")
     if override:

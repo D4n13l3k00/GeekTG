@@ -41,21 +41,46 @@ from aiogram.utils.exceptions import Unauthorized
 
 from . import utils
 import logging
-import requests
 import io
 import functools
+from importlib.resources import files
 from types import FunctionType
 
 import inspect
 
 logger = logging.getLogger(__name__)
 
-photo = io.BytesIO(
-    requests.get(
-        "https://github.com/GeekTG/Friendly-Telegram/raw/master/friendly-telegram/bot_avatar.png" # noqa: E501, W505
-    ).content
+_AVATAR_URL = (
+    "https://github.com/D4n13l3k00/GeekTG/raw/master/"
+    "friendly_telegram/web/static/bot_avatar.png"
 )
-photo.name = "avatar.png"
+_avatar_bytes: bytes | None = None
+
+
+def _load_avatar() -> "io.BytesIO":
+    """Return a fresh ``BytesIO`` of the inline-bot avatar.
+
+    Lazy: the bytes are only read on first call (typically during
+    ``@BotFather`` bot creation, not at every startup). Prefers the file
+    bundled with the package and only hits the network if it's missing —
+    so an offline boot or a custom build without static assets still
+    works without freezing on import.
+    """
+    global _avatar_bytes
+    if _avatar_bytes is None:
+        try:
+            _avatar_bytes = (
+                files("friendly_telegram.web")
+                .joinpath("static/bot_avatar.png")
+                .read_bytes()
+            )
+        except (FileNotFoundError, ModuleNotFoundError, OSError):
+            logger.warning("Bundled avatar not found, downloading from GitHub")
+            import requests
+            _avatar_bytes = requests.get(_AVATAR_URL, timeout=10).content
+    buf = io.BytesIO(_avatar_bytes)
+    buf.name = "avatar.png"
+    return buf
 
 
 class InlineCall:
@@ -431,7 +456,7 @@ class InlineManager:
             await r.delete()
 
             try:
-                m = await conv.send_file(photo)
+                m = await conv.send_file(_load_avatar())
                 r = await conv.get_response()
             except Exception:
                 # In case user was not able to send photo to
@@ -581,7 +606,7 @@ class InlineManager:
                         await m.delete()
                         await r.delete()
 
-                        m = await conv.send_file(photo)
+                        m = await conv.send_file(_load_avatar())
                         r = await conv.get_response()
 
                         await asyncio.sleep(2)
