@@ -1,10 +1,15 @@
-"""Status + backup/restore endpoints."""
+"""Status + backup/restore + logout endpoints."""
 
+import asyncio
+import atexit
+import functools
 import io
 import logging
 import os
 import secrets
 import shutil
+import signal
+import sys
 import tempfile
 import time
 import zipfile
@@ -132,6 +137,9 @@ class Web:
         self.app.router.add_post("/restore/request", self.restore_request)
         self.app.router.add_post("/restore/confirm", self.restore_confirm)
         self.app.router.add_post("/restore", self.restore)
+        self.app.router.add_post("/logout/request", self.logout_request)
+        self.app.router.add_post("/logout/confirm", self.logout_confirm)
+        self.app.router.add_post("/logout", self.logout_perform)
         self._resource_cache = (0.0, None)
         self._proc = None  # lazy psutil.Process
 
@@ -144,6 +152,11 @@ class Web:
             label="восстановления из бэкапа",
             prompt=("Введите этот код в веб-интерфейсе, чтобы подтвердить, "
                     "что хотите перезаписать данные юзербота."),
+        )
+        self._logout_gate = _CodeGate(
+            label="выхода из юзербота",
+            prompt=("Введите этот код в веб-интерфейсе, чтобы завершить "
+                    "сессию Telegram и перезапустить юзербот."),
         )
 
     def _data_dir(self) -> str:
@@ -253,6 +266,65 @@ class Web:
 
     async def restore_confirm(self, request):
         return await self._gate_confirm(self._restore_gate, request)
+
+    async def logout_request(self, request):
+        return await self._gate_request(self._logout_gate)
+
+    async def logout_confirm(self, request):
+        return await self._gate_confirm(self._logout_gate, request)
+
+    async def logout_perform(self, request):
+        """Revoke Telegram session(s) and re-exec the process.
+
+        After ``log_out()`` the .session file is gone, so the next boot
+        lands the user back on the initial-setup wizard. ``api_token.txt``
+        is intentionally preserved — the API credentials belong to the
+        user, not the session.
+        """
+        if not self._logout_gate.consume(request.query.get("token", "")):
+            return web.Response(status=403, text="confirmation required")
+        if not self.client_data:
+            return web.Response(status=503, text="no client")
+
+        # Hand the actual logout off to a background task so we can flush
+        # the 200 to the browser before the process tears itself down.
+        asyncio.create_task(self._do_logout())
+        return web.json_response({"ok": True})
+
+    async def _do_logout(self):
+        # Brief grace so aiohttp finishes writing the response.
+        await asyncio.sleep(0.4)
+
+        for _loader, client, _db in list(self.client_data.values()):
+            try:
+                await client.send_message(
+                    "me",
+                    "🔓 <b>Выход из юзербота</b>\n\nСессия Telegram завершена.",
+                    parse_mode="html",
+                )
+            except Exception:
+                logger.warning("logout: goodbye message failed", exc_info=True)
+            try:
+                # log_out() revokes the auth key on Telegram's side, removes
+                # the .session file, and disconnects the client.
+                await client.log_out()
+            except Exception:
+                logger.exception("logout: client.log_out() failed")
+
+        # Re-exec ourselves once the asyncio loop unwinds. Mirrors what
+        # modules/updater.py does on .restart, minus its TG-message
+        # roundtrip (we just logged out — no client to talk to).
+        atexit.register(functools.partial(
+            os.execl,
+            sys.executable,
+            sys.executable,
+            "-m",
+            os.path.relpath(utils.get_base_dir()),
+            *sys.argv[1:],
+        ))
+        # Nudge the loop to exit. SIGTERM is the same signal main.py's
+        # graceful-shutdown handler installs in _async_main.
+        os.kill(os.getpid(), signal.SIGTERM)
 
     async def backup(self, request):
         """Stream a zip of the data dir (sessions, config, modules, db).
