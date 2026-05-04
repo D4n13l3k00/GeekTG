@@ -213,7 +213,7 @@
       </div>
 
       <div class="backup-row">
-        <a class="btn secondary" id="btn-backup" href="/backup" download>⬇️ Скачать бэкап</a>
+        <button class="btn secondary" id="btn-backup">⬇️ Скачать бэкап</button>
         <button class="btn secondary" id="btn-restore">⬆️ Восстановить</button>
       </div>
       <input type="file" id="restore-file" accept=".zip" hidden>
@@ -356,6 +356,34 @@
   }
   loadStatus();
   setInterval(loadStatus, 5000);
+
+  $('btn-backup').onclick = async () => {
+    const { isConfirmed } = await Swal.fire({
+      title: '⚠️ Внимание',
+      html: '<div style="text-align:left">'
+          + 'В архиве — <b>файл сессии Telegram</b>. Кто угодно с этим '
+          + 'файлом сможет войти в ваш аккаунт <u>без кода и пароля 2FA</u>.'
+          + '<br><br>'
+          + '• <b>Не отправляйте</b> бэкап другим людям, в чаты, на пастбины.<br>'
+          + '• Храните на зашифрованном носителе.<br>'
+          + '• При утечке — немедленно <i>«Завершить все сеансы»</i> в настройках Telegram.'
+          + '</div>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Понимаю, скачать',
+      cancelButtonText: 'Отмена',
+      focusCancel: true,
+    });
+    if (!isConfirmed) return;
+    // Trigger download via a hidden link so the browser uses the
+    // server-provided filename from Content-Disposition.
+    const a = document.createElement('a');
+    a.href = '/backup';
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   $('btn-restore').onclick = () => $('restore-file').click();
   $('restore-file').onchange = async (e) => {
