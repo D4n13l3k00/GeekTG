@@ -18,24 +18,26 @@
 
 import asyncio
 import inspect
+import time
 from importlib.resources import files
 
 import aiohttp_jinja2
 import jinja2
 from aiohttp import web
 
-from . import initial_setup, root
+from . import initial_setup, root, status
 
 _STATIC_DIR = str(files("friendly_telegram.web").joinpath("static"))
 
 
-class Web(initial_setup.Web, root.Web):
+class Web(initial_setup.Web, root.Web, status.Web):
     def __init__(self, **kwargs):
         self.runner = None
         self.port = None
         self.running = asyncio.Event()
         self.ready = asyncio.Event()
         self.client_data = {}
+        self.started_at = time.time()
         self.app = web.Application()
         aiohttp_jinja2.setup(
             self.app,

@@ -17,9 +17,14 @@
       к Telegram, чтобы получить код подтверждения.
     </p>
     <button class="btn" id="btn-start">Начать</button>
-    <p class="footer">
+    <p class="footer" style="margin-bottom: 4px;">
       Сессия хранится локально. Никто, кроме вас, не получит доступ к аккаунту.
     </p>
+    <p class="footer" style="margin-top: 4px;">
+      Уже есть бэкап от прошлой установки?
+      <a href="#" id="link-restore">Восстановить из файла</a>.
+    </p>
+    <input type="file" id="restore-file" accept=".zip" hidden>
   </div>
 
   <!-- STEP 2: api credentials -->
@@ -90,6 +95,45 @@
   let codeAttempt = '';
 
   $('btn-start').onclick = () => show('step-api');
+
+  $('link-restore').onclick = (e) => {
+    e.preventDefault();
+    $('restore-file').click();
+  };
+  $('restore-file').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    const { isConfirmed } = await Swal.fire({
+      title: 'Восстановить из бэкапа?',
+      html: `Файл <code>${file.name.replace(/[<>&]/g, '')}</code> распакуется в каталог данных.<br>`
+          + `После этого <b>перезапустите процесс</b> — мы войдём в Telegram `
+          + `с восстановленной сессией без повторной авторизации.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Восстановить',
+      cancelButtonText: 'Отмена',
+    });
+    if (!isConfirmed) return;
+    const fd = new FormData();
+    fd.append('backup', file);
+    Swal.fire({ title: 'Загрузка…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+      const r = await fetch('/restore', { method: 'POST', body: fd });
+      if (!r.ok) {
+        const reason = await r.text();
+        throw new Error(reason || r.status);
+      }
+      await Swal.fire({
+        icon: 'success',
+        title: 'Готово',
+        html: 'Бэкап распакован.<br>Теперь перезапустите процесс или контейнер — '
+            + 'на следующем старте юзербот подхватит сессию из бэкапа.',
+      });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Не удалось восстановить', text: String(err.message || err) });
+    }
+  };
 
   $('btn-api').onclick = async () => {
     const idEl = $('api_id'), hashEl = $('api_hash');

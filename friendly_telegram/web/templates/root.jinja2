@@ -86,6 +86,82 @@
     from { background-position: 200% 0; }
     to   { background-position: -200% 0; }
   }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 12px 0 4px;
+    font-size: 12px;
+  }
+  .status-cell {
+    background: rgba(12,14,19,.5);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    min-width: 0;
+  }
+  .status-cell .label {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 2px;
+  }
+  .status-cell .value {
+    color: var(--text);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status-cell .value.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+  .status-cell.full { grid-column: 1 / -1; }
+  .bot-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(12,14,19,.5);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    margin: 4px 0 8px;
+    font-size: 13px;
+  }
+  .bot-card .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #6b7280; flex-shrink: 0;
+  }
+  .bot-card.ready .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e80; }
+  .bot-card.broken .dot { background: #ef4444; }
+  .bot-card .text { flex: 1; min-width: 0; color: var(--text); }
+  .bot-card .text small { color: var(--muted); display: block; font-size: 11.5px; }
+
+  .backup-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .backup-row .btn {
+    flex: 1;
+    margin: 0;
+  }
+  details.advanced {
+    margin-top: 14px;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0;
+    background: rgba(12,14,19,.4);
+  }
+  details.advanced summary {
+    cursor: pointer;
+    padding: 9px 12px;
+    color: var(--muted);
+    font-size: 12.5px;
+    user-select: none;
+  }
+  details.advanced[open] summary { color: var(--text); }
+  details.advanced .body { padding: 4px 12px 12px; }
 </style>
 {% endblock %}
 
@@ -116,6 +192,33 @@
     💬 Открыть «Избранное»
   </a>
   <button class="btn secondary" id="btn-restart">Перезапустить</button>
+
+  <details class="advanced">
+    <summary>⚙️ Состояние и обслуживание</summary>
+    <div class="body">
+      <div class="bot-card" id="bot-card">
+        <div class="dot"></div>
+        <div class="text" id="bot-text">
+          <span>Загружаем…</span>
+        </div>
+      </div>
+
+      <div class="status-grid" id="status-grid">
+        <div class="status-cell"><div class="label">Аптайм</div><div class="value" id="st-uptime">—</div></div>
+        <div class="status-cell"><div class="label">Версия</div><div class="value mono" id="st-version">—</div></div>
+        <div class="status-cell"><div class="label">Память (RSS)</div><div class="value" id="st-rss">—</div></div>
+        <div class="status-cell"><div class="label">CPU</div><div class="value" id="st-cpu">—</div></div>
+        <div class="status-cell full"><div class="label">Диск (data-dir)</div><div class="value" id="st-disk">—</div></div>
+        <div class="status-cell full"><div class="label">Платформа</div><div class="value" id="st-platform">—</div></div>
+      </div>
+
+      <div class="backup-row">
+        <a class="btn secondary" id="btn-backup" href="/backup" download>⬇️ Скачать бэкап</a>
+        <button class="btn secondary" id="btn-restore">⬆️ Восстановить</button>
+      </div>
+      <input type="file" id="restore-file" accept=".zip" hidden>
+    </div>
+  </details>
 
   <p class="footer">
     Если что-то пошло не так — проверьте логи и попробуйте перезапустить.
@@ -187,6 +290,109 @@
   }
 
   loadProfile();
+
+  function fmtBytes(n) {
+    if (n == null) return '—';
+    const u = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    let i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i === 0 ? n : n.toFixed(n < 10 ? 1 : 0)) + ' ' + u[i];
+  }
+  function fmtUptime(sec) {
+    if (sec == null) return '—';
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (d) return `${d}д ${h}ч ${m}м`;
+    if (h) return `${h}ч ${m}м`;
+    if (m) return `${m}м ${s}с`;
+    return `${s}с`;
+  }
+
+  async function loadStatus() {
+    try {
+      const r = await fetch('/status');
+      if (!r.ok) return;
+      const s = await r.json();
+      $('st-uptime').textContent = fmtUptime(s.uptime_seconds);
+      const sha = s.git && s.git.sha ? ' · ' + s.git.sha.slice(0, 7) : '';
+      const versionEl = $('st-version');
+      versionEl.textContent = s.version + sha;
+      if (s.git && s.git.url) {
+        versionEl.title = s.git.url;
+      }
+      $('st-platform').textContent = s.platform || '—';
+
+      const res = s.resources || {};
+      $('st-rss').textContent = res.available ? fmtBytes(res.rss_bytes) : 'недоступно (psutil)';
+      $('st-cpu').textContent = res.available ? res.cpu_percent.toFixed(1) + '%' : '—';
+      if (res.disk) {
+        const used = res.disk.total_bytes - res.disk.free_bytes;
+        const pct = ((used / res.disk.total_bytes) * 100).toFixed(0);
+        $('st-disk').textContent =
+          `${fmtBytes(res.disk.used_by_us_bytes)} наших · ` +
+          `${fmtBytes(res.disk.free_bytes)} свободно из ${fmtBytes(res.disk.total_bytes)} (${pct}%)`;
+      }
+
+      const card = $('bot-card');
+      const text = $('bot-text');
+      card.classList.remove('ready', 'broken');
+      const bot = s.bot || {};
+      if (bot.ready && bot.username) {
+        card.classList.add('ready');
+        text.innerHTML = `<span>Инлайн-бот работает</span>` +
+          `<small>@${escapeHtml(bot.username)}</small>`;
+      } else if (bot.configured) {
+        card.classList.add('broken');
+        text.innerHTML = `<span>Токен бота задан, но бот не отвечает</span>` +
+          `<small>отправьте <code>.bottoken</code> в Telegram для проверки</small>`;
+      } else {
+        text.innerHTML = `<span>Инлайн-бот не настроен</span>` +
+          `<small>отправьте себе <code>.setbottoken</code> чтобы создать</small>`;
+      }
+    } catch (_) { /* silent — status is non-critical */ }
+  }
+  loadStatus();
+  setInterval(loadStatus, 5000);
+
+  $('btn-restore').onclick = () => $('restore-file').click();
+  $('restore-file').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const { isConfirmed } = await Swal.fire({
+      title: 'Восстановить из бэкапа?',
+      html: `Текущие данные будут <b>перезаписаны</b> файлами из <code>${escapeHtml(file.name)}</code>.<br>`
+          + `После восстановления потребуется перезапуск.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Восстановить',
+      cancelButtonText: 'Отмена',
+    });
+    e.target.value = '';
+    if (!isConfirmed) return;
+
+    const fd = new FormData();
+    fd.append('backup', file);
+    Swal.fire({ title: 'Загрузка…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+      const r = await fetch('/restore', { method: 'POST', body: fd });
+      if (!r.ok) {
+        const reason = await r.text();
+        throw new Error(reason || r.status);
+      }
+      await Swal.fire({
+        icon: 'success',
+        title: 'Бэкап восстановлен',
+        text: 'Сейчас перезапустим юзербот, чтобы изменения применились.',
+        timer: 2000,
+        showConfirmButton: false,
+      });
+      $('btn-restart').click();
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Не удалось восстановить', text: String(err.message || err) });
+    }
+  };
 
   document.getElementById('btn-restart').onclick = async () => {
     const { isConfirmed } = await Swal.fire({
