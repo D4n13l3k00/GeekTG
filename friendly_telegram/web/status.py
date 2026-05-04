@@ -3,6 +3,7 @@
 import io
 import logging
 import os
+import secrets
 import shutil
 import tempfile
 import time
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 _RESOURCE_CACHE_TTL = 3.0
 _BACKUP_EXCLUDE_SUFFIXES = (".session-journal",)
 _RESTORE_MAX_BYTES = 64 * 1024 * 1024  # 64 MiB hard limit on uploads
+_BACKUP_CODE_TTL = 300                 # 5 min — TG-delivered code lifetime
+_BACKUP_TOKEN_TTL = 60                 # one-shot download window after confirm
 
 
 def _try_psutil():
@@ -26,6 +29,83 @@ def _try_psutil():
     except Exception:
         return None
     return psutil
+
+
+class _CodeGate:
+    """Single-slot 2FA: DM a code to Saved Messages, verify, mint a token.
+
+    Used to gate both backup downloads and restore uploads — anything
+    that touches the on-disk session bytes.
+    """
+
+    def __init__(self, label: str, prompt: str):
+        self.label = label    # noun phrase: "скачивания бэкапа", "восстановления"
+        self.prompt = prompt  # extra explanatory line for the TG message
+        self._pending = None  # dict|None: code, expires, msg_id, client
+        self._token = None    # dict|None: token, expires
+
+    async def request(self, client) -> bool:
+        await self.discard()
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        text = (
+            f"🔐 <b>Код для {self.label}:</b> <code>{code}</code>\n\n"
+            f"{self.prompt}\n\n"
+            "Никому не показывайте этот код. Действителен 5 минут. "
+            "Сообщение удалится автоматически после ввода."
+        )
+        try:
+            msg = await client.send_message("me", text, parse_mode="html")
+        except Exception:
+            logger.exception("code-gate %s: send failed", self.label)
+            return False
+        self._pending = {
+            "code": code,
+            "expires": time.monotonic() + _BACKUP_CODE_TTL,
+            "msg_id": msg.id,
+            "client": client,
+        }
+        return True
+
+    async def discard(self):
+        pending = self._pending
+        self._pending = None
+        if pending is None:
+            return
+        try:
+            await pending["client"].delete_messages("me", [pending["msg_id"]])
+        except Exception:
+            logger.debug("code-gate %s: cleanup failed",
+                         self.label, exc_info=True)
+
+    async def confirm(self, code: str):
+        """Return ``("ok", token)`` or ``(error_str, None)``."""
+        pending = self._pending
+        if pending is None:
+            return ("no_pending", None)
+        if time.monotonic() > pending["expires"]:
+            await self.discard()
+            return ("expired", None)
+        if not secrets.compare_digest(code, pending["code"]):
+            return ("wrong", None)
+        await self.discard()
+        token = secrets.token_urlsafe(24)
+        self._token = {
+            "token": token,
+            "expires": time.monotonic() + _BACKUP_TOKEN_TTL,
+        }
+        return ("ok", token)
+
+    def consume(self, presented: str) -> bool:
+        slot = self._token
+        if slot is None:
+            return False
+        if time.monotonic() > slot["expires"]:
+            self._token = None
+            return False
+        if not presented or not secrets.compare_digest(presented, slot["token"]):
+            return False
+        self._token = None  # one-shot
+        return True
 
 
 def _data_dir_size(path: str) -> int:
@@ -45,10 +125,25 @@ class Web:
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.app.router.add_get("/status", self.status)
+        self.app.router.add_post("/backup/request", self.backup_request)
+        self.app.router.add_post("/backup/confirm", self.backup_confirm)
         self.app.router.add_get("/backup", self.backup)
+        self.app.router.add_post("/restore/request", self.restore_request)
+        self.app.router.add_post("/restore/confirm", self.restore_confirm)
         self.app.router.add_post("/restore", self.restore)
         self._resource_cache = (0.0, None)
         self._proc = None  # lazy psutil.Process
+
+        self._backup_gate = _CodeGate(
+            label="скачивания бэкапа",
+            prompt=("Введите этот код в веб-интерфейсе, чтобы подтвердить, "
+                    "что бэкап скачиваете именно вы."),
+        )
+        self._restore_gate = _CodeGate(
+            label="восстановления из бэкапа",
+            prompt=("Введите этот код в веб-интерфейсе, чтобы подтвердить, "
+                    "что хотите перезаписать данные юзербота."),
+        )
 
     def _data_dir(self) -> str:
         return self.data_root or utils.get_data_dir()
@@ -122,8 +217,50 @@ class Web:
             "authorized": bool(self.client_data),
         })
 
+    def _first_authed_client(self):
+        if not self.client_data:
+            return None
+        return next(iter(self.client_data.values()))[1]
+
+    async def _gate_request(self, gate):
+        client = self._first_authed_client()
+        if client is None:
+            return web.json_response({"error": "no_client"}, status=503)
+        ok = await gate.request(client)
+        if not ok:
+            return web.json_response({"error": "send_failed"}, status=502)
+        return web.json_response({"ok": True, "ttl": _BACKUP_CODE_TTL})
+
+    async def _gate_confirm(self, gate, request):
+        body = (await request.text()).strip()
+        if not body.isdigit() or len(body) != 6:
+            return web.json_response({"error": "bad_format"}, status=400)
+        result, payload = await gate.confirm(body)
+        if result == "ok":
+            return web.json_response({"ok": True, "token": payload})
+        status = {"wrong": 403, "expired": 410, "no_pending": 410}.get(result, 400)
+        return web.json_response({"error": result}, status=status)
+
+    async def backup_request(self, request):
+        return await self._gate_request(self._backup_gate)
+
+    async def backup_confirm(self, request):
+        return await self._gate_confirm(self._backup_gate, request)
+
+    async def restore_request(self, request):
+        return await self._gate_request(self._restore_gate)
+
+    async def restore_confirm(self, request):
+        return await self._gate_confirm(self._restore_gate, request)
+
     async def backup(self, request):
-        """Stream a zip of the data dir (sessions, config, modules, db)."""
+        """Stream a zip of the data dir (sessions, config, modules, db).
+
+        Requires ``?token=`` from a successful /backup/confirm round-trip.
+        """
+        if not self._backup_gate.consume(request.query.get("token", "")):
+            return web.Response(status=403, text="confirmation required")
+
         data_dir = self._data_dir()
         if not os.path.isdir(data_dir):
             return web.Response(status=404, text="data dir missing")
@@ -155,6 +292,11 @@ class Web:
     async def restore(self, request):
         """Replace data-dir contents with files from an uploaded zip.
 
+        Post-auth, requires ``?token=`` from /restore/confirm — restore
+        is destructive (overwrites the live session). Pre-auth (no
+        client yet, e.g. fresh install) doesn't need TG confirmation
+        because there's no account state to protect with.
+
         Strategy: extract to a sibling ``.restore-tmp`` directory, validate
         every member stays inside it, then move entries on top of the live
         data dir. We do *not* wipe the existing dir first — if the zip is a
@@ -162,6 +304,10 @@ class Web:
         should restart the process afterwards (we can't safely hot-swap the
         Telethon session while it's connected).
         """
+        if self._first_authed_client() is not None:
+            if not self._restore_gate.consume(request.query.get("token", "")):
+                return web.Response(status=403, text="confirmation required")
+
         if not request.body_exists:
             return web.Response(status=400, text="no body")
 

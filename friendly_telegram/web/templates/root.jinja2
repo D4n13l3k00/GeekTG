@@ -358,7 +358,8 @@
   setInterval(loadStatus, 5000);
 
   $('btn-backup').onclick = async () => {
-    const { isConfirmed } = await Swal.fire({
+    // Step 1: warning + request a TG-delivered code.
+    const warn = await Swal.fire({
       title: '⚠️ Внимание',
       html: '<div style="text-align:left">'
           + 'В архиве — <b>файл сессии Telegram</b>. Кто угодно с этим '
@@ -367,18 +368,74 @@
           + '• <b>Не отправляйте</b> бэкап другим людям, в чаты, на пастбины.<br>'
           + '• Храните на зашифрованном носителе.<br>'
           + '• При утечке — немедленно <i>«Завершить все сеансы»</i> в настройках Telegram.'
+          + '<br><br>Чтобы продолжить, мы пришлём код подтверждения в ваше «Избранное».'
           + '</div>',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Понимаю, скачать',
+      confirmButtonText: 'Прислать код',
       cancelButtonText: 'Отмена',
       focusCancel: true,
     });
-    if (!isConfirmed) return;
-    // Trigger download via a hidden link so the browser uses the
-    // server-provided filename from Content-Disposition.
+    if (!warn.isConfirmed) return;
+
+    Swal.fire({ title: 'Отправляем код…', allowOutsideClick: false,
+                didOpen: () => Swal.showLoading() });
+    try {
+      const r = await fetch('/backup/request', { method: 'POST' });
+      if (!r.ok) {
+        const reason = (await r.json()).error || r.status;
+        throw new Error(reason === 'no_client' ? 'Нет активного Telegram-клиента.'
+                       : reason === 'send_failed' ? 'Не удалось отправить код в Telegram.'
+                       : 'Сервер ответил: ' + reason);
+      }
+    } catch (e) {
+      Swal.fire({ icon: 'error', title: 'Не удалось запросить код',
+                  text: String(e.message || e) });
+      return;
+    }
+
+    // Step 2: ask for the code.
+    const { value: code, isConfirmed } = await Swal.fire({
+      title: 'Введите код из «Избранного»',
+      html: 'Мы отправили 6-значный код в ваш чат с самим собой '
+          + 'в Telegram. После ввода кода сообщение удалится автоматически.',
+      input: 'text',
+      inputAttributes: { autocapitalize: 'off', inputmode: 'numeric',
+                         maxlength: 6, autocomplete: 'one-time-code' },
+      inputPlaceholder: '6 цифр',
+      inputValidator: (v) => {
+        if (!/^\d{6}$/.test(v || '')) return 'Введите 6 цифр.';
+      },
+      confirmButtonText: 'Подтвердить',
+      showCancelButton: true,
+      cancelButtonText: 'Отмена',
+      allowOutsideClick: false,
+    });
+    if (!isConfirmed || !code) return;
+
+    // Step 3: confirm and download.
+    let token;
+    try {
+      const r = await fetch('/backup/confirm', { method: 'POST', body: code });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const map = {
+          wrong: 'Неверный код. Попробуйте снова — нажмите «Скачать бэкап».',
+          expired: 'Код устарел. Запросите новый.',
+          no_pending: 'Активный код не найден. Запросите новый.',
+          bad_format: 'Введите 6 цифр.',
+        };
+        throw new Error(map[j.error] || 'Сервер ответил: ' + (j.error || r.status));
+      }
+      token = j.token;
+    } catch (e) {
+      Swal.fire({ icon: 'error', title: 'Не удалось подтвердить',
+                  text: String(e.message || e) });
+      return;
+    }
+
     const a = document.createElement('a');
-    a.href = '/backup';
+    a.href = '/backup?token=' + encodeURIComponent(token);
     a.download = '';
     document.body.appendChild(a);
     a.click();
@@ -388,24 +445,86 @@
   $('btn-restore').onclick = () => $('restore-file').click();
   $('restore-file').onchange = async (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
-    const { isConfirmed } = await Swal.fire({
+
+    // Step 1: warning + request a TG-delivered code.
+    const warn = await Swal.fire({
       title: 'Восстановить из бэкапа?',
       html: `Текущие данные будут <b>перезаписаны</b> файлами из <code>${escapeHtml(file.name)}</code>.<br>`
-          + `После восстановления потребуется перезапуск.`,
+          + `После восстановления потребуется перезапуск.`
+          + `<br><br>Чтобы продолжить, мы пришлём код подтверждения в ваше «Избранное».`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Восстановить',
+      confirmButtonText: 'Прислать код',
       cancelButtonText: 'Отмена',
+      focusCancel: true,
     });
-    e.target.value = '';
-    if (!isConfirmed) return;
+    if (!warn.isConfirmed) return;
+
+    Swal.fire({ title: 'Отправляем код…', allowOutsideClick: false,
+                didOpen: () => Swal.showLoading() });
+    try {
+      const r = await fetch('/restore/request', { method: 'POST' });
+      if (!r.ok) {
+        const reason = (await r.json().catch(() => ({}))).error || r.status;
+        throw new Error(reason === 'no_client' ? 'Нет активного Telegram-клиента.'
+                       : reason === 'send_failed' ? 'Не удалось отправить код в Telegram.'
+                       : 'Сервер ответил: ' + reason);
+      }
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Не удалось запросить код',
+                  text: String(err.message || err) });
+      return;
+    }
+
+    // Step 2: ask for the code.
+    const { value: code, isConfirmed } = await Swal.fire({
+      title: 'Введите код из «Избранного»',
+      html: 'Мы отправили 6-значный код в ваш чат с самим собой '
+          + 'в Telegram. После ввода кода сообщение удалится автоматически.',
+      input: 'text',
+      inputAttributes: { autocapitalize: 'off', inputmode: 'numeric',
+                         maxlength: 6, autocomplete: 'one-time-code' },
+      inputPlaceholder: '6 цифр',
+      inputValidator: (v) => {
+        if (!/^\d{6}$/.test(v || '')) return 'Введите 6 цифр.';
+      },
+      confirmButtonText: 'Подтвердить',
+      showCancelButton: true,
+      cancelButtonText: 'Отмена',
+      allowOutsideClick: false,
+    });
+    if (!isConfirmed || !code) return;
+
+    // Step 3: confirm and upload.
+    let token;
+    try {
+      const r = await fetch('/restore/confirm', { method: 'POST', body: code });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const map = {
+          wrong: 'Неверный код. Попробуйте снова — нажмите «Восстановить».',
+          expired: 'Код устарел. Запросите новый.',
+          no_pending: 'Активный код не найден. Запросите новый.',
+          bad_format: 'Введите 6 цифр.',
+        };
+        throw new Error(map[j.error] || 'Сервер ответил: ' + (j.error || r.status));
+      }
+      token = j.token;
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Не удалось подтвердить',
+                  text: String(err.message || err) });
+      return;
+    }
 
     const fd = new FormData();
     fd.append('backup', file);
-    Swal.fire({ title: 'Загрузка…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    Swal.fire({ title: 'Загрузка…', allowOutsideClick: false,
+                didOpen: () => Swal.showLoading() });
     try {
-      const r = await fetch('/restore', { method: 'POST', body: fd });
+      const r = await fetch('/restore?token=' + encodeURIComponent(token),
+                            { method: 'POST', body: fd });
       if (!r.ok) {
         const reason = await r.text();
         throw new Error(reason || r.status);
@@ -419,7 +538,8 @@
       });
       $('btn-restart').click();
     } catch (err) {
-      Swal.fire({ icon: 'error', title: 'Не удалось восстановить', text: String(err.message || err) });
+      Swal.fire({ icon: 'error', title: 'Не удалось восстановить',
+                  text: String(err.message || err) });
     }
   };
 
