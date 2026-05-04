@@ -508,6 +508,28 @@
     }
   };
 
+  /**
+   * Resolve once the server has *first gone down and then come back up*.
+   * Without the "down first" gate, an immediate /ping may catch the still-
+   * alive old listener (logout/restart has a grace delay before exec) and
+   * we'd reload prematurely into a dying server.
+   */
+  async function waitForServerRestart() {
+    const ping = () => fetch('/ping', { method: 'GET', cache: 'no-store' });
+    let sawDown = false;
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 800));
+      try {
+        const r = await ping();
+        if (r.ok && sawDown) return true;
+      } catch (_) {
+        sawDown = true;
+      }
+    }
+    return false;
+  }
+
   $('btn-logout').onclick = async () => {
     const warn = await Swal.fire({
       title: '🔓 Выйти из аккаунта?',
@@ -543,12 +565,12 @@
       allowOutsideClick: false,
       didOpen: () => Swal.showLoading(),
     });
-    const poll = setInterval(async () => {
-      try {
-        const r = await fetch('/is_restart_complete', { method: 'GET' });
-        if (r.ok) { clearInterval(poll); location.reload(); }
-      } catch (_) {}
-    }, 1500);
+    if (await waitForServerRestart()) {
+      location.reload();
+    } else {
+      Swal.fire({ icon: 'warning', title: 'Сервер не отозвался',
+                  text: 'Перезагрузите страницу вручную.' });
+    }
   };
 
   document.getElementById('btn-restart').onclick = async () => {
@@ -571,15 +593,12 @@
       didOpen: () => Swal.showLoading(),
     });
 
-    const poll = setInterval(async () => {
-      try {
-        const r = await fetch('/is_restart_complete', {method: 'GET'});
-        if (r.ok) {
-          clearInterval(poll);
-          location.reload();
-        }
-      } catch (_) {}
-    }, 1500);
+    if (await waitForServerRestart()) {
+      location.reload();
+    } else {
+      Swal.fire({ icon: 'warning', title: 'Сервер не отозвался',
+                  text: 'Перезагрузите страницу вручную.' });
+    }
   };
 </script>
 {% endblock %}

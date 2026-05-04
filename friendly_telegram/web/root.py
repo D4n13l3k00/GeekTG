@@ -26,7 +26,9 @@ class Web:
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.app.router.add_get("/", self.root)
-        self.app.router.add_get("/is_restart_complete", lambda r: True)
+        self.app.router.add_get("/ping", self.ping)
+        # Legacy alias kept for any external pollers.
+        self.app.router.add_get("/is_restart_complete", self.ping)
         self.app.router.add_post("/restart", self.restart)
         self.app.router.add_get("/me", self.me)
         self.app.router.add_get("/me/avatar", self.me_avatar)
@@ -92,6 +94,15 @@ class Web:
     @aiohttp_jinja2.template("root.jinja2")
     async def root(self, request):
         return {}
+
+    async def ping(self, request):
+        """Liveness probe used by the dashboard to detect post-restart boot.
+
+        Returns 200 with no body. During a restart/logout the TCP listener
+        is briefly torn down, so callers fail fast (connection refused) and
+        retry until this endpoint answers again.
+        """
+        return web.Response(text="ok")
 
     async def restart(self, request):
         # Invalidate cache so the post-restart UI fetches fresh data.
