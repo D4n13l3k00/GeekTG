@@ -1,7 +1,7 @@
 services:
   gtg:
     build: .
-    image: geektg/friendly-telegram:latest
+    image: geektg:latest
     container_name: gtg
     restart: unless-stopped
     stdin_open: true   # нужен для интерактивного логина (ввод кода/пароля)

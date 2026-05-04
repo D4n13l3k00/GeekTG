@@ -662,18 +662,23 @@ async def amain(first, client, allclients, web, arguments):
     await modules.send_ready(client, db, allclients)
 
     if first:
+        # Optional commit SHA — only available when running from a git
+        # checkout. Wheel/Docker installs never have ``.git`` and that's
+        # fine, just skip the build line silently.
+        build = ""
         try:
             import git
+            repo = git.Repo(search_parent_directories=True)
+            build = repo.head.commit.hexsha
+        except Exception:
+            logging.debug("git.Repo() unavailable — running outside a checkout")
 
-            repo = git.Repo()
+        version = ".".join(map(str, __version__))
+        _platform = utils.get_platform_name()
+        me = await client.get_me(True)
 
-            build = repo.heads[0].commit.hexsha
-            diff = repo.git.log(["HEAD..origin/master", "--oneline"])
-            upd = r"\33[31mUpdate required" if diff else r"Up-to-date"
-
-            _platform = utils.get_platform_name()
-
-            logo1 = f"""
+        build_line = f"                     • Build: {build[:7]}\n" if build else ""
+        logo1 = f"""
                                       )
                    (               ( /(
                    ) )   (   (    )())
@@ -683,25 +688,16 @@ async def amain(first, client, allclients, web, arguments):
                     | (_ | _|| _|  ' <
                       ___|___|___|_|_\\
 
-                     • Build: {build[:7]}
-                     • Version: {'.'.join(list(map(str, list(__version__))))}
-                     • {upd}
+{build_line}                     • Version: {version}
                      • Platform: {_platform}
-                     - Started for {(await client.get_me(True)).user_id} -"""
+                     - Started for {me.user_id} -"""
 
-            print(logo1)
+        print(logo1)
 
-            logging.info(f"=== BUILD: {build} ===")
-            logging.info(
-                f"=== VERSION: {'.'.join(list(map(str, list(__version__))))} ==="
-            )
-            logging.info(
-                f"=== PLATFORM: {utils.get_platform_name()} ==="
-            )
-        except Exception:
-            logging.exception(
-                "Badge error"
-            )  # This part is not so necessary, so if error occures, ignore it
+        if build:
+            logging.info("=== BUILD: %s ===", build)
+        logging.info("=== VERSION: %s ===", version)
+        logging.info("=== PLATFORM: %s ===", _platform)
 
     await client.run_until_disconnected()
 

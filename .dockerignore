@@ -1,0 +1,37 @@
+# Anything that should never end up baked into the image.
+
+# Virtualenvs — uv creates a fresh one inside the container.
+.venv/
+.venv-test/
+venv/
+
+# Build artefacts
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+
+# VCS / editor / OS junk
+.git/
+.gitignore
+.github/
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# User data — never copy host state into the image
+api_token.txt
+friendly-telegram*.session*
+config.json
+config-*.json
+loaded_modules/
+data/
+
+# Misc
+*.log
+ftg-install.log
+.setup_complete
+docker-compose.yml
+Dockerfile.*
