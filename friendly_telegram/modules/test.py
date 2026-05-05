@@ -47,6 +47,14 @@ class TestMod(loader.Module):
             "<b> to ignore this warning</b>"
         ),
         "choose_loglevel": "💁‍♂️ <b>Choose log level</b>",
+        "loglevel_set": (
+            "✅ <b>Stdout log level set to </b><code>{}</code><b>. "
+            "Saved — survives restart.</b>"
+        ),
+        "loglevel_invalid": (
+            "🚫 <b>Unknown level. Use a name (DEBUG/INFO/WARNING/ERROR/CRITICAL) "
+            "or an int (0/10/20/30/40/50).</b>"
+        ),
     }
 
     @staticmethod
@@ -208,6 +216,87 @@ class TestMod(loader.Module):
                 caption=self.strings("logs_caption").format(named_lvl),
             )
 
+    async def _apply_loglevel(self, lvl: int) -> None:
+        for handler in logging.getLogger().handlers:
+            handler.setLevel(lvl)
+        self._db.set("friendly_telegram.main", "loglevel", lvl)
+
+    @loader.owner
+    async def setloglevelcmd(
+        self,
+        message: Union[Message, InlineCall],
+        lvl: Union[int, None] = None,
+    ) -> None:
+        """<level> - Set stdout log level (CRITICAL/ERROR/WARNING/INFO/DEBUG or 0-50). Persists across restarts."""
+        if not isinstance(lvl, int):
+            args = utils.get_args_raw(message) if isinstance(message, Message) else ""
+            if args:
+                try:
+                    lvl = int(args.split()[0])
+                except ValueError:
+                    lvl = getattr(logging, args.split()[0].upper(), None)
+
+        if not isinstance(lvl, int):
+            if isinstance(message, Message) and utils.get_args_raw(message):
+                await utils.answer(message, self.strings("loglevel_invalid"))
+                return
+
+            if self.inline.init_complete:
+                await self.inline.form(
+                    text=self.strings("choose_loglevel"),
+                    reply_markup=[
+                        [
+                            {
+                                "text": "🚨 Critical",
+                                "callback": self.setloglevelcmd,
+                                "args": (50,),
+                            },
+                            {
+                                "text": "🚫 Error",
+                                "callback": self.setloglevelcmd,
+                                "args": (40,),
+                            },
+                        ],
+                        [
+                            {
+                                "text": "⚠️ Warning",
+                                "callback": self.setloglevelcmd,
+                                "args": (30,),
+                            },
+                            {
+                                "text": "ℹ️ Info",
+                                "callback": self.setloglevelcmd,
+                                "args": (20,),
+                            },
+                        ],
+                        [
+                            {
+                                "text": "🧑‍💻 Debug",
+                                "callback": self.setloglevelcmd,
+                                "args": (10,),
+                            },
+                            {
+                                "text": "👁 All",
+                                "callback": self.setloglevelcmd,
+                                "args": (0,),
+                            },
+                        ],
+                        [{"text": "🚫 Cancel", "callback": self.cancel}],
+                    ],
+                    message=message,
+                )
+            else:
+                await utils.answer(message, self.strings("loglevel_invalid"))
+            return
+
+        await self._apply_loglevel(lvl)
+        named = logging._levelToName.get(lvl, str(lvl))  # skipcq: PYL-W0212
+        text = self.strings("loglevel_set").format(named)
+        if isinstance(message, Message):
+            await utils.answer(message, text)
+        else:
+            await message.edit(text)
+
     @loader.owner
     async def suspendcmd(self, message: Message) -> None:
         """.suspend <time>
@@ -236,3 +325,4 @@ class TestMod(loader.Module):
 
     async def client_ready(self, client, db) -> None:
         self._client = client
+        self._db = db

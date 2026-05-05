@@ -93,7 +93,7 @@ def init():
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     mem = MemoryHandler(handler, 2500)
-    mem.lvl = logging.DEBUG
+    mem.lvl = logging.INFO
 
     root = logging.getLogger()
     root.handlers = []
