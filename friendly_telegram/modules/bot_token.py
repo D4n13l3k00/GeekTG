@@ -12,12 +12,14 @@ Note: token strings are stored only in the local config DB
 forwarded anywhere.
 """
 
-import asyncio
 import logging
 import re
 
 from aiogram import Bot
-from aiogram.utils.exceptions import Unauthorized, ValidationError
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramUnauthorizedError,
+)
 from telethon.tl.types import Message
 
 from .. import loader, utils
@@ -130,7 +132,7 @@ class BotTokenMod(loader.Module):
         try:
             me = await bot.get_me()
             return me.username
-        except (Unauthorized, ValidationError) as exc:
+        except (TelegramUnauthorizedError, TelegramBadRequest) as exc:
             logger.warning("token validation rejected: %s", exc)
             return None
         except Exception:

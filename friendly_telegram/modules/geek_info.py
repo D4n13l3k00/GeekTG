@@ -1,20 +1,20 @@
 """
-    █ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
-    █▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
+█ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
+█▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
 
-    Copyright 2022 t.me/hikariatama
-    Licensed under the GNU GPLv3
+Copyright 2022 t.me/hikariatama
+Licensed under the GNU GPLv3
 """
 
 # scope: inline
 
-from .. import loader, main, utils
 import logging
+
 import aiogram
 import git
-from aiogram.types.input_message_content import InputTextMessageContent
-
 from telethon.utils import get_display_name
+
+from .. import loader, utils
 from ..inline import GeekInlineQuery, rand
 
 logger = logging.getLogger(__name__)
@@ -113,8 +113,8 @@ class GeekInfoMod(loader.Module):
                     title="Send userbot info",
                     description="ℹ This will not compromise any sensitive data",
                     caption=self.build_message(),
-                    parse_mode="html",
-                    thumb_url="https://github.com/D4n13l3k00/GeekTG/raw/master/friendly-telegram/bot_avatar.png",  # noqa: E501
+                    parse_mode="HTML",
+                    thumbnail_url="https://github.com/D4n13l3k00/GeekTG/raw/master/friendly-telegram/bot_avatar.png",  # noqa: E501
                     reply_markup=self.inline._generate_markup(
                         self.config["custom_buttons"]
                     ),

@@ -8,10 +8,9 @@ version = "4.0.0"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
-# Upper bound: aiogram 2.x pins aiohttp <3.9, and aiohttp 3.8.x has no
-# wheels for Python ≥3.14 (its Cython sources reference C internals that
-# were removed in 3.14). Lifting this cap requires migrating to aiogram 3.x.
-requires-python = ">=3.8,<3.14"
+# aiohttp 3.10 has no Python 3.14 wheels yet — bump the upper bound when
+# they ship. aiogram 3.x itself is happy on 3.13.
+requires-python = ">=3.9,<3.14"
 authors = [{ name = "GeekTG Team" }]
 keywords = ["telegram", "userbot", "telethon"]
 classifiers = [
@@ -28,10 +27,10 @@ dependencies = [
     "babel>=2.9.1",
     "meval>=2.5",
     "aiohttp_jinja2>=1.5",
-    "aiohttp",
+    "aiohttp>=3.10",
     "Jinja2>=3.1.2",
     "requests>=2.28.0",
-    "aiogram>=2.21,<3",
+    "aiogram>=3.13,<4",
     "psutil>=5.9",
 ]
 

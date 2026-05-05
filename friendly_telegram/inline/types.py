@@ -16,15 +16,30 @@ from importlib.resources import files
 from types import FunctionType
 from typing import Any, List, Union
 
-import aiogram
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQuery,
     InputMediaPhoto,
-    Message as AiogramMessage,
+    LinkPreviewOptions,
 )
+from aiogram.types import Message as AiogramMessage
+
+
+def _is_not_modified(exc: TelegramBadRequest) -> bool:
+    return "message is not modified" in (exc.message or "").lower()
+
+
+def _is_invalid_query(exc: TelegramBadRequest) -> bool:
+    msg = (exc.message or "").lower()
+    return "query is too old" in msg or "query_id_invalid" in msg
+
+
+def _is_message_id_invalid(exc: TelegramBadRequest) -> bool:
+    return "message_id_invalid" in (exc.message or "").lower()
+
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +71,7 @@ def _load_avatar() -> "io.BytesIO":
         except (FileNotFoundError, ModuleNotFoundError, OSError):
             logger.warning("Bundled avatar not found, downloading from GitHub")
             import requests
+
             _avatar_bytes = requests.get(_AVATAR_URL, timeout=10).content
     buf = io.BytesIO(_avatar_bytes)
     buf.name = "avatar.png"
@@ -71,8 +87,7 @@ class InlineCall:
 
 
 class BotMessage(AiogramMessage):
-    def __init__(self):
-        super().__init__()
+    pass
 
 
 class GeekInlineQuery:
@@ -148,31 +163,44 @@ async def edit(
         form["always_allow"] = always_allow
     try:
         await self.bot.edit_message_text(
-            text,
+            text=text,
             inline_message_id=inline_message_id or query.inline_message_id,
-            parse_mode="HTML",
-            disable_web_page_preview=disable_web_page_preview,
+            link_preview_options=LinkPreviewOptions(
+                is_disabled=disable_web_page_preview
+            ),
             reply_markup=self._generate_markup(form_uid),
         )
-    except aiogram.utils.exceptions.MessageNotModified:
-        try:
-            await query.answer()
-        except aiogram.utils.exceptions.InvalidQueryID:
-            pass  # Preloader removal — ignore "query gone" errors
-    except aiogram.utils.exceptions.RetryAfter as e:
-        logger.info(f"Sleeping {e.timeout}s on aiogram FloodWait...")
-        await asyncio.sleep(e.timeout)
+    except TelegramRetryAfter as e:
+        logger.info(f"Sleeping {e.retry_after}s on aiogram FloodWait...")
+        await asyncio.sleep(e.retry_after)
         return await edit(
-            text, reply_markup, force_me, always_allow, self,
-            query, form, form_uid, inline_message_id,
+            text,
+            reply_markup,
+            force_me,
+            always_allow,
+            self,
+            query,
+            form,
+            form_uid,
+            inline_message_id,
         )
-    except aiogram.utils.exceptions.MessageIdInvalid:
-        try:
-            await query.answer(
-                "I should have edited some message, but it is deleted :("
-            )
-        except aiogram.utils.exceptions.InvalidQueryID:
-            pass
+    except TelegramBadRequest as e:
+        if _is_not_modified(e):
+            try:
+                await query.answer()
+            except TelegramBadRequest as e2:
+                if not _is_invalid_query(e2):
+                    raise
+        elif _is_message_id_invalid(e):
+            try:
+                await query.answer(
+                    "I should have edited some message, but it is deleted :("
+                )
+            except TelegramBadRequest as e2:
+                if not _is_invalid_query(e2):
+                    raise
+        else:
+            raise
 
 
 async def custom_next_handler(
@@ -198,8 +226,11 @@ async def custom_next_handler(
         await call.answer("No photos left", show_alert=True)
         return
 
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Next ➡️", callback_data=btn_call_data))
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Next ➡️", callback_data=btn_call_data)]
+        ]
+    )
 
     _caption = (
         caption if isinstance(caption, str) or not callable(caption) else caption()
@@ -208,7 +239,7 @@ async def custom_next_handler(
     try:
         await self.bot.edit_message_media(
             inline_message_id=call.inline_message_id,
-            media=InputMediaPhoto(media=new_url, caption=_caption, parse_mode="HTML"),
+            media=InputMediaPhoto(media=new_url, caption=_caption),
             reply_markup=markup,
         )
     except Exception:
@@ -249,10 +280,12 @@ async def answer(
 ) -> bool:
     try:
         await mod.bot.send_message(
-            message.chat.id,
-            text,
+            chat_id=message.chat.id,
+            text=text,
             parse_mode=parse_mode,
-            disable_web_page_preview=disable_web_page_preview,
+            link_preview_options=LinkPreviewOptions(
+                is_disabled=disable_web_page_preview
+            ),
             **kwargs,
         )
     except Exception:
