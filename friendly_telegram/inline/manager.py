@@ -27,10 +27,7 @@ from typing import Any, List, Union  # noqa: F401
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.exceptions import (
-    TelegramConflictError,
-    TelegramUnauthorizedError,
-)
+from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.types import (
     CallbackQuery,
     ChosenInlineResult,
@@ -477,26 +474,44 @@ class InlineManager:
         self._dp.chosen_inline_result.register(self._chosen_inline_handler)
         self._dp.message.register(self._message_handler)
 
-        # Polling-side error handling. The v2 monkey-patch on bot.get_updates
-        # is gone — v3 routes everything through dp.errors. We only intervene
-        # on the two terminal cases (token revoked elsewhere, token expired).
+        # ``dp.errors`` in v3 catches *handler* exceptions, not polling-loop
+        # errors. Use it only for the unauth case where we want to stop the
+        # bot cleanly. Conflict / network errors are handled by aiogram's own
+        # retry loop and would just spam logs if we revoked tokens here.
         @self._dp.errors()
-        async def _on_polling_error(event):
-            exc = event.exception
-            if isinstance(exc, TelegramConflictError):
-                await self._dp_revoke_token()
-                return True
-            if isinstance(exc, TelegramUnauthorizedError):
+        async def _on_handler_error(event):
+            if isinstance(event.exception, TelegramUnauthorizedError):
                 logger.critical("Got Unauthorized")
                 await self._stop()
                 return True
             return False
+
+        # aiogram-2 silently dropped any leftover webhook before polling;
+        # v3 doesn't. If the token previously powered a webhook bot — or
+        # another GeekTG instance crashed mid-poll — getUpdates stays
+        # locked and our handlers never fire. Drop the webhook and any
+        # pending updates before we start.
+        try:
+            await self.bot.delete_webhook(drop_pending_updates=True)
+        except Exception:
+            logger.exception("delete_webhook before polling failed; continuing")
 
         # handle_signals=False — userbot's web logout flow installs its own
         # SIGTERM handler via os.kill(); we don't want aiogram to swallow it.
         self._task = asyncio.ensure_future(
             self._dp.start_polling(self.bot, handle_signals=False)
         )
+
+        # ensure_future swallows exceptions silently. Surface them so a
+        # broken polling loop doesn't look like "buttons just don't work".
+        def _polling_done(task: asyncio.Task) -> None:
+            if task.cancelled():
+                return
+            exc = task.exception()
+            if exc is not None:
+                logger.error("Inline-bot polling task exited with: %r", exc)
+
+        self._task.add_done_callback(_polling_done)
         self._cleaner_task = asyncio.ensure_future(self._cleaner())
 
     async def _message_handler(self, message: AiogramMessage) -> None:
