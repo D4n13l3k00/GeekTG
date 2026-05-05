@@ -616,6 +616,9 @@ class InlineManager:
 
     async def _inline_handler(self, inline_query: InlineQuery) -> None:
         """Inline query handler (forms' calls)"""
+        logger.info(
+            "inline_query: q=%r from=%s", inline_query.query, inline_query.from_user.id
+        )
         # Retrieve query from passed object
         query = inline_query.query
 
@@ -805,12 +808,15 @@ class InlineManager:
             cache_time=60,
         )
 
-    async def _callback_query_handler(
-        self, query: CallbackQuery, reply_markup: List[List[dict]] = None
-    ) -> None:
-        """Callback query handler (buttons' presses)"""
-        if reply_markup is None:
-            reply_markup = []
+    async def _callback_query_handler(self, query: CallbackQuery) -> None:
+        """Callback query handler (buttons' presses).
+
+        v2 had an unused ``reply_markup`` parameter on this signature. aiogram
+        3 inspects handler params and passes any matching name from workflow
+        data — leaving the legacy kwarg in here invited a foreign middleware
+        to inject something and crash dispatch silently. Dropped.
+        """
+        logger.info("callback_query: data=%r from=%s", query.data, query.from_user.id)
 
         # First, dispatch all registered callback handlers
         for mod in self._allmodules.modules:
