@@ -114,7 +114,7 @@ class GeekInfoMod(loader.Module):
                     description="ℹ This will not compromise any sensitive data",
                     caption=self.build_message(),
                     parse_mode="html",
-                    thumb_url="https://github.com/GeekTG/Friendly-Telegram/raw/master/friendly-telegram/bot_avatar.png",  # noqa: E501
+                    thumb_url="https://github.com/D4n13l3k00/GeekTG/raw/master/friendly-telegram/bot_avatar.png",  # noqa: E501
                     reply_markup=self.inline._generate_markup(
                         self.config["custom_buttons"]
                     ),

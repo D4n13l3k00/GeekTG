@@ -60,7 +60,7 @@ authoritative source.
 ### Option A — `uv` (recommended)
 
 ```sh
-uv tool install git+https://github.com/GeekTG/Friendly-Telegram
+uv tool install git+https://github.com/D4n13l3k00/GeekTG
 gtg
 ```
 
@@ -71,7 +71,7 @@ the wheel and isolates dependencies. Upgrades are `uv tool upgrade gtg`.
 ### Option B — `pipx`
 
 ```sh
-pipx install git+https://github.com/GeekTG/Friendly-Telegram
+pipx install git+https://github.com/D4n13l3k00/GeekTG
 gtg
 ```
 
@@ -88,7 +88,7 @@ at the data directory so sessions survive `docker compose down`.
 ### Option D — From source
 
 ```sh
-git clone https://github.com/GeekTG/Friendly-Telegram
+git clone https://github.com/D4n13l3k00/GeekTG
 cd Friendly-Telegram
 uv sync
 uv run gtg

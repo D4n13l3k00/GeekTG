@@ -55,8 +55,8 @@ gtg = "friendly_telegram.__main__:_cli"
 friendly-telegram = "friendly_telegram.__main__:_cli"
 
 [project.urls]
-Homepage = "https://github.com/GeekTG/Friendly-Telegram"
-Source = "https://github.com/GeekTG/Friendly-Telegram"
+Homepage = "https://github.com/D4n13l3k00/GeekTG"
+Source = "https://github.com/D4n13l3k00/GeekTG"
 
 [tool.hatch.build]
 # Don't let .gitignore (which excludes runtime data dirs like

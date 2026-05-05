@@ -50,7 +50,7 @@ class UpdaterMod(loader.Module):
     def __init__(self):
         self.config = loader.ModuleConfig(
             "GIT_ORIGIN_URL",
-            "https://github.com/GeekTG/Friendly-Telegram",
+            "https://github.com/D4n13l3k00/GeekTG",
             lambda m: self.strings("origin_cfg_doc", m),
         )
 
