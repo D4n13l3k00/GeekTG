@@ -249,7 +249,96 @@ def _public_ip(timeout=2.0):
     return None
 
 
-async def install_requirements(requirements, *, user_install=False):
+AUTO_REQUIREMENTS = "auto_requirements.txt"
+
+
+def _load_auto_requirements(path):
+    """Read the persisted ``pkg==version`` manifest. Empty dict if absent."""
+    out = {}
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                # Tolerate any pinned form (==, >=, ~=) by splitting on the
+                # first comparator. We persist == ourselves, but if a user
+                # hand-edits the file we don't want to corrupt it.
+                for sep in ("==", ">=", "<=", "~=", "!=", ">", "<"):
+                    if sep in line:
+                        name, _, ver = line.partition(sep)
+                        out[name.strip().lower()] = sep + ver.strip()
+                        break
+                else:
+                    out[line.lower()] = ""
+    except FileNotFoundError:
+        pass
+    return out
+
+
+def _save_auto_requirements(path, manifest):
+    """Write ``manifest`` (``{name: '==ver'}``) sorted, one entry per line."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(
+            "# Packages installed at runtime by `# requires:` auto-installer.\n"
+            "# Replayed by docker/entrypoint.sh after `uv sync` so deps survive\n"
+            "# container restarts and `uv tool upgrade`. Edit if you must;\n"
+            "# format: <name><pin>, e.g. `googletrans==4.0.0rc1`.\n"
+        )
+        for name in sorted(manifest):
+            f.write(f"{name}{manifest[name]}\n")
+    os.replace(tmp, path)
+
+
+async def _resolve_installed_versions(python_exe, packages):
+    """Ask the target python which versions of ``packages`` actually got installed.
+
+    Best-effort: returns ``{name: '==ver'}`` for what we could resolve,
+    leaves out the rest (manifest still records them with no pin).
+    """
+    import shutil
+    import subprocess
+
+    uv_bin = shutil.which("uv")
+    if uv_bin:
+        proc = await asyncio.create_subprocess_exec(
+            uv_bin, "pip", "list", "--python", python_exe, "--format=json",
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+    else:
+        proc = await asyncio.create_subprocess_exec(
+            python_exe, "-m", "pip", "list", "--format=json",
+            "--disable-pip-version-check",
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+    out, _ = await proc.communicate()
+    if proc.returncode != 0:
+        return {}
+    try:
+        import json as _json
+        installed = {p["name"].lower(): p["version"] for p in _json.loads(out)}
+    except Exception:
+        return {}
+    wanted = {p.lower() for p in packages}
+    return {name: f"=={ver}" for name, ver in installed.items() if name in wanted}
+
+
+def _normalize_requirement(spec):
+    """Strip extras/markers from a requirement string, lowercase the name.
+
+    ``Pillow[heif] >= 10`` → ``pillow``. We persist the resolved version
+    separately, so the manifest just needs a clean package name to match.
+    """
+    spec = spec.strip()
+    for sep in ("[", "==", ">=", "<=", "~=", "!=", ">", "<", ";", " "):
+        if sep in spec:
+            spec = spec.split(sep, 1)[0]
+    return spec.strip().lower()
+
+
+async def install_requirements(requirements, *, user_install=False, record=True):
     """Install ``requirements`` into the running interpreter's environment.
 
     Picks the best available installer at runtime:
@@ -259,6 +348,11 @@ async def install_requirements(requirements, *, user_install=False):
     2. ``python -m pip install ...`` — classic path.
     3. ``python -m ensurepip --upgrade`` then ``-m pip`` — last resort when
        pip is missing but ensurepip is available.
+
+    On success, also appends the resolved versions to
+    ``<data_dir>/auto_requirements.txt`` so a subsequent ``uv sync --frozen``
+    (e.g. on Docker entrypoint) doesn't wipe them. Pass ``record=False`` to
+    opt out (used by tests / one-off installs).
 
     Returns the subprocess return code (``0`` on success).
     """
@@ -277,27 +371,49 @@ async def install_requirements(requirements, *, user_install=False):
     if uv_bin:
         argv = [uv_bin, "pip", "install", "--python", sys.executable, *pkgs]
         proc = await asyncio.create_subprocess_exec(*argv)
-        return await proc.wait()
+        rc = await proc.wait()
+    else:
+        async def _pip():
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "pip", *base, *pkgs,
+                stderr=subprocess.PIPE,
+            )
+            _, err = await proc.communicate()
+            return proc.returncode, err or b""
 
-    async def _pip():
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "pip", *base, *pkgs,
-            stderr=subprocess.PIPE,
-        )
-        _, err = await proc.communicate()
-        return proc.returncode, err or b""
+        rc, err = await _pip()
+        if rc != 0 and b"No module named pip" in err:
+            # Bootstrap pip into the current venv, then retry once.
+            boot = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "ensurepip", "--upgrade",
+            )
+            if await boot.wait() == 0:
+                rc, err = await _pip()
+        if err:
+            sys.stderr.write(err.decode("utf-8", "replace"))
 
-    rc, err = await _pip()
-    if rc != 0 and b"No module named pip" in err:
-        # Bootstrap pip into the current venv, then retry once.
-        boot = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "ensurepip", "--upgrade",
-        )
-        if await boot.wait() == 0:
-            rc, err = await _pip()
-    if err:
-        sys.stderr.write(err.decode("utf-8", "replace"))
+    if rc == 0 and record and pkgs:
+        try:
+            await _record_installed(pkgs)
+        except Exception:
+            logging.exception("install_requirements: failed to record manifest")
     return rc
+
+
+async def _record_installed(packages):
+    """Persist ``packages`` (raw requirement strings) to the data-dir manifest."""
+    import sys
+    path = os.path.join(get_data_dir(), AUTO_REQUIREMENTS)
+    manifest = _load_auto_requirements(path)
+    names = [_normalize_requirement(p) for p in packages]
+    versions = await _resolve_installed_versions(sys.executable, names)
+    for name in names:
+        if not name:
+            continue
+        # Prefer a freshly-resolved == pin; fall back to "" (no pin) if we
+        # couldn't read pip-list output for some reason.
+        manifest[name] = versions.get(name, manifest.get(name, ""))
+    _save_auto_requirements(path, manifest)
 
 
 def print_web_urls(port):

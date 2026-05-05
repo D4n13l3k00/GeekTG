@@ -39,6 +39,22 @@ runuser -u ftg -- env \
     "PATH=$RUNTIME_VENV/bin:$PATH" \
     uv sync --frozen --no-dev --extra media --project /home/ftg
 
+# 2.5. Replay packages installed at runtime by ``# requires:`` auto-installer.
+#      uv sync --frozen above would have removed them; the bot maintains
+#      <data-dir>/auto_requirements.txt on every successful install, and we
+#      put them back here so module deps survive container restarts.
+#      No --frozen: the manifest may name newer versions than uv.lock allows.
+AUTO_REQS="$DATA_DIR/auto_requirements.txt"
+if [ -s "$AUTO_REQS" ]; then
+    echo "🧩 Replaying runtime-installed packages from auto_requirements.txt ..."
+    runuser -u ftg -- env \
+        "VIRTUAL_ENV=$RUNTIME_VENV" \
+        "PATH=$RUNTIME_VENV/bin:$PATH" \
+        uv pip install --python "$RUNTIME_VENV/bin/python" \
+            -r "$AUTO_REQS" || \
+        echo "⚠️  Some auto-requirements failed to install; continuing." >&2
+fi
+
 # 3. Hand off to the real command as ftg (defaults to ``gtg --port 8888``
 #    from the Dockerfile CMD).
 exec runuser -u ftg -- "$@"
