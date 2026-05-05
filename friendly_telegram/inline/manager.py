@@ -1115,6 +1115,11 @@ class InlineManager:
                 ),
             )
         except Exception:
+            # The user-facing message just says "check logs" but the original
+            # code never actually logged the cause, so the trail ended here.
+            # Surface it so failures (validation, RPC errors, no result from
+            # the inline bot, …) show up in stdout/.logs.
+            logger.exception("inline.form() failed for form_uid=%s", form_uid)
             msg = (
                 "🚫 <b>A problem occurred with inline bot "
                 "while processing query. Check logs for "
@@ -1250,6 +1255,8 @@ class InlineManager:
                 ),
             )
         except Exception:
+            # Mirror form()'s diagnostics so gallery() failures aren't silent.
+            logger.exception("inline.gallery() failed for gallery_uid=%s", gallery_uid)
             msg = (
                 "🚫 <b>A problem occurred with inline bot "
                 "while processing query. Check logs for "
