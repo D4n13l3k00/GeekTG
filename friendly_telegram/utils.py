@@ -23,20 +23,20 @@ import functools
 import io
 import logging
 import os
+import random
 import shlex
 import socket
-import random
 import string
 
 import telethon
 from telethon.tl.custom.message import Message
 from telethon.tl.types import (
-    PeerUser,
-    PeerChat,
-    PeerChannel,
     MessageEntityMentionName,
-    User,
     MessageMediaWebPage,
+    PeerChannel,
+    PeerChat,
+    PeerUser,
+    User,
 )
 
 from . import __version__
@@ -51,7 +51,8 @@ def get_platform_name():
        set by the user or by ``--platform`` at startup.
     2. ``$LAVHOST`` — auto-detect lavHost.
     3. ``$PREFIX`` containing ``com.termux`` — Termux.
-    4. Fallback: ``"📻 VDS"``.
+    4. ``/.dockerenv`` present — Docker container.
+    5. Fallback: ``"📻 VDS"``.
 
     Not cached because the override env-var may be set after first import.
     """
@@ -62,6 +63,8 @@ def get_platform_name():
         return f"✌️ lavHost {os.environ['LAVHOST']}"
     if "com.termux" in os.environ.get("PREFIX", ""):
         return "📱 Termux"
+    if os.path.exists("/.dockerenv"):
+        return "🐳 Docker"
     return "📻 VDS"
 
 
@@ -117,8 +120,7 @@ def get_args_split_by(message, sep):
     rely on "no blanks" actually meaning that.
     """
     raw = get_args_raw(message)
-    return [stripped for section in raw.split(sep)
-            if (stripped := section.strip())]
+    return [stripped for section in raw.split(sep) if (stripped := section.strip())]
 
 
 def get_chat_id(message):
@@ -144,6 +146,7 @@ def get_git_info():
     # installs don't have ``.git`` anyway and end up in the except path.
     try:
         import git
+
         repo = git.Repo(search_parent_directories=True)
         ver = repo.head.commit.hexsha
     except Exception:
@@ -220,8 +223,10 @@ def _local_ips():
     # The hostname-based lookup misses some setups (containers, NAT). Use the
     # "UDP-connect" trick to ask the kernel which interface would be used to
     # reach the internet — this exposes the real LAN IP without any traffic.
-    for family, target in ((socket.AF_INET, ("8.8.8.8", 80)),
-                           (socket.AF_INET6, ("2001:4860:4860::8888", 80))):
+    for family, target in (
+        (socket.AF_INET, ("8.8.8.8", 80)),
+        (socket.AF_INET6, ("2001:4860:4860::8888", 80)),
+    ):
         try:
             with socket.socket(family, socket.SOCK_DGRAM) as s:
                 s.settimeout(0.5)
@@ -243,8 +248,12 @@ def _local_ips():
 def _public_ip(timeout=2.0):
     """Best-effort public IP lookup. Returns ``None`` on any failure."""
     import requests
-    for url in ("https://api.ipify.org", "https://ifconfig.me/ip",
-                "https://ipv4.icanhazip.com"):
+
+    for url in (
+        "https://api.ipify.org",
+        "https://ifconfig.me/ip",
+        "https://ipv4.icanhazip.com",
+    ):
         try:
             r = requests.get(url, timeout=timeout)
             if r.ok and r.text.strip():
@@ -309,20 +318,32 @@ async def _resolve_installed_versions(python_exe, packages):
     uv_bin = shutil.which("uv")
     if uv_bin:
         proc = await asyncio.create_subprocess_exec(
-            uv_bin, "pip", "list", "--python", python_exe, "--format=json",
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            uv_bin,
+            "pip",
+            "list",
+            "--python",
+            python_exe,
+            "--format=json",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
     else:
         proc = await asyncio.create_subprocess_exec(
-            python_exe, "-m", "pip", "list", "--format=json",
+            python_exe,
+            "-m",
+            "pip",
+            "list",
+            "--format=json",
             "--disable-pip-version-check",
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
     out, _ = await proc.communicate()
     if proc.returncode != 0:
         return {}
     try:
         import json as _json
+
         installed = {p["name"].lower(): p["version"] for p in _json.loads(out)}
     except Exception:
         return {}
@@ -365,9 +386,13 @@ async def install_requirements(requirements, *, user_install=False, record=True)
     import subprocess
     import sys
 
-    base = ["install", "--upgrade", "-q",
-            "--disable-pip-version-check",
-            "--no-warn-script-location"]
+    base = [
+        "install",
+        "--upgrade",
+        "-q",
+        "--disable-pip-version-check",
+        "--no-warn-script-location",
+    ]
     if user_install:
         base.append("--user")
     pkgs = list(requirements)
@@ -378,9 +403,14 @@ async def install_requirements(requirements, *, user_install=False, record=True)
         proc = await asyncio.create_subprocess_exec(*argv)
         rc = await proc.wait()
     else:
+
         async def _pip():
             proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "pip", *base, *pkgs,
+                sys.executable,
+                "-m",
+                "pip",
+                *base,
+                *pkgs,
                 stderr=subprocess.PIPE,
             )
             _, err = await proc.communicate()
@@ -390,7 +420,10 @@ async def install_requirements(requirements, *, user_install=False, record=True)
         if rc != 0 and b"No module named pip" in err:
             # Bootstrap pip into the current venv, then retry once.
             boot = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "ensurepip", "--upgrade",
+                sys.executable,
+                "-m",
+                "ensurepip",
+                "--upgrade",
             )
             if await boot.wait() == 0:
                 rc, err = await _pip()
@@ -408,6 +441,7 @@ async def install_requirements(requirements, *, user_install=False, record=True)
 async def _record_installed(packages):
     """Persist ``packages`` (raw requirement strings) to the data-dir manifest."""
     import sys
+
     path = os.path.join(get_data_dir(), AUTO_REQUIREMENTS)
     manifest = _load_auto_requirements(path)
     names = [_normalize_requirement(p) for p in packages]
@@ -423,6 +457,7 @@ async def _record_installed(packages):
 
 def print_web_urls(port):
     """Print every URL the user can use to reach the web setup."""
+
     def _fmt(host):
         return f"http://[{host}]:{port}" if ":" in host else f"http://{host}:{port}"
 
