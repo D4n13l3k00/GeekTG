@@ -62,8 +62,10 @@ RUN mkdir -p /home/ftg/.local/share/friendly-telegram/loaded_modules \
 COPY --chown=ftg:ftg docker/entrypoint.sh /usr/local/bin/gtg-entrypoint
 USER root
 RUN chmod +x /usr/local/bin/gtg-entrypoint
-USER ftg
 
+# Stay as root for the entrypoint: it needs to chown freshly-mounted
+# named volumes (Docker creates those root-owned regardless of what the
+# image had at the mountpoint) before dropping to ftg via runuser.
 EXPOSE 8888
 
 ENTRYPOINT ["gtg-entrypoint"]
