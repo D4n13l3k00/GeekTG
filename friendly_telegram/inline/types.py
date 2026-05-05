@@ -1,7 +1,7 @@
 """Helpers for the InlineManager: light-weight wrappers and the
-``edit`` / ``delete`` / ``unload`` / ``answer`` / ``custom_next_handler``
-functions that get bound onto callback / inline-query objects via
-``functools.partial(self=manager, ...)``.
+``edit`` / ``delete`` / ``unload`` / ``custom_next_handler`` functions
+bound onto ``InlineCall`` instances via ``functools.partial(self=manager,
+...)``.
 
 These are stateless on their own — they receive the manager instance
 through the ``self`` kwarg at call time, so they're safe to live in
@@ -79,11 +79,43 @@ def _load_avatar() -> "io.BytesIO":
 
 
 class InlineCall:
-    def __init__(self):
-        self.delete = None
-        self.unload = None
-        self.edit = None
-        super().__init__()
+    """Wrapper passed to form/button callbacks instead of the raw event.
+
+    Why a wrapper: aiogram 3 ``CallbackQuery`` / ``ChosenInlineResult``
+    are frozen pydantic models — we cannot stick our own ``edit`` /
+    ``delete`` / ``unload`` / ``form`` helpers onto them. So we keep the
+    helpers on this object and delegate everything else (``data``,
+    ``from_user``, ``message``, ``answer``, ``id``, …) through
+    ``__getattr__`` to the underlying event.
+
+    Module callbacks see the same surface as before — ``call.data``,
+    ``await call.edit(...)``, ``await call.answer("ok")``.
+    """
+
+    def __init__(
+        self,
+        event=None,
+        delete=None,
+        unload=None,
+        edit=None,
+        form=None,
+    ):
+        self.__dict__["_event"] = event
+        self.delete = delete
+        self.unload = unload
+        self.edit = edit
+        self.form = form
+
+    def __getattr__(self, name: str):
+        # __getattr__ is only invoked when normal lookup fails, so our own
+        # ``delete`` / ``edit`` / etc. shadow the underlying event's
+        # attributes (which is the whole point: we override ``edit`` with
+        # our markup-aware helper while still delegating ``data``,
+        # ``from_user``, etc.).
+        event = self.__dict__.get("_event")
+        if event is None:
+            raise AttributeError(name)
+        return getattr(event, name)
 
 
 class BotMessage(AiogramMessage):
@@ -265,29 +297,6 @@ async def unload(self: Any = None, form_uid: Any = None) -> bool:
     """Internal helper: forget the form without deleting the chat message."""
     try:
         del self._forms[form_uid]
-    except Exception:
-        return False
-    return True
-
-
-async def answer(
-    text: str = None,
-    mod: Any = None,
-    message: AiogramMessage = None,
-    parse_mode: str = "HTML",
-    disable_web_page_preview: bool = True,
-    **kwargs,
-) -> bool:
-    try:
-        await mod.bot.send_message(
-            chat_id=message.chat.id,
-            text=text,
-            parse_mode=parse_mode,
-            link_preview_options=LinkPreviewOptions(
-                is_disabled=disable_web_page_preview
-            ),
-            **kwargs,
-        )
     except Exception:
         return False
     return True

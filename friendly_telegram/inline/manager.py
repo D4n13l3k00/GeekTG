@@ -1,10 +1,10 @@
 """InlineManager: bot lifecycle, form/gallery dispatch, callback dispatch.
 
 The freestanding helpers (``InlineCall``, ``GeekInlineQuery``,
-``edit``/``delete``/``unload``/``answer``/``custom_next_handler``,
+``edit``/``delete``/``unload``/``custom_next_handler``,
 ``rand``/``array_sum``/``_load_avatar``) live in ``.types`` — they're
-stateless and bound onto callback objects via ``functools.partial``
-at runtime.
+stateless and bound onto ``InlineCall`` instances via
+``functools.partial`` at runtime.
 """
 
 import asyncio
@@ -56,7 +56,6 @@ from .types import (
     GeekInlineQuery,
     InlineCall,
     _load_avatar,
-    answer,
     array_sum,
     custom_next_handler,
     delete,
@@ -505,18 +504,15 @@ class InlineManager:
         if message.chat.type != "private":
             return
 
+        # Native ``message.answer(text)`` exists on aiogram 3 Message and
+        # honours the bot-level DefaultBotProperties(parse_mode=HTML), so we
+        # no longer inject our own ``answer`` helper here. Modules built
+        # against the v2 injected helper that pass ``parse_mode``/``disable_
+        # web_page_preview`` keep working since aiogram's signature is a
+        # superset of ours.
         for mod in self._allmodules.modules:
             if not hasattr(mod, "aiogram_watcher"):
                 continue
-
-            # aiogram 3 Telegram-objects are frozen pydantic models — bypass
-            # __setattr__ to keep the v2 contract of injecting helpers onto
-            # the event passed into module handlers.
-            object.__setattr__(
-                message,
-                "answer",
-                functools.partial(answer, mod=self, message=message),
-            )
 
             try:
                 await mod.aiogram_watcher(message)
@@ -835,33 +831,21 @@ class InlineManager:
                         await query.answer("You are not allowed to press this button!")
                         return
 
-                    # CallbackQuery is a frozen pydantic model in aiogram 3;
-                    # object.__setattr__ keeps the v2 contract where module
-                    # callbacks find these helpers on the event object.
-                    object.__setattr__(
-                        query,
-                        "delete",
-                        functools.partial(
+                    call = InlineCall(
+                        event=query,
+                        delete=functools.partial(
                             delete, self=self, form=form, form_uid=form_uid
                         ),
-                    )
-                    object.__setattr__(
-                        query,
-                        "unload",
-                        functools.partial(unload, self=self, form_uid=form_uid),
-                    )
-                    object.__setattr__(
-                        query,
-                        "edit",
-                        functools.partial(
+                        unload=functools.partial(unload, self=self, form_uid=form_uid),
+                        edit=functools.partial(
                             edit, self=self, query=query, form=form, form_uid=form_uid
                         ),
+                        form={"id": form_uid, **form},
                     )
-                    object.__setattr__(query, "form", {"id": form_uid, **form})
 
                     try:
                         return await button["callback"](
-                            query,
+                            call,
                             *button.get("args", []),
                             **button.get("kwargs", {}),
                         )
@@ -911,20 +895,19 @@ class InlineManager:
 
                     query = query.split(maxsplit=1)[1] if len(query.split()) > 1 else ""
 
-                    call = InlineCall()
-
-                    call.delete = functools.partial(
-                        delete, self=self, form=form, form_uid=form_uid
-                    )
-                    call.unload = functools.partial(
-                        unload, self=self, form_uid=form_uid
-                    )
-                    call.edit = functools.partial(
-                        edit,
-                        self=self,
-                        query=chosen_inline_query,
-                        form=form,
-                        form_uid=form_uid,
+                    call = InlineCall(
+                        event=chosen_inline_query,
+                        delete=functools.partial(
+                            delete, self=self, form=form, form_uid=form_uid
+                        ),
+                        unload=functools.partial(unload, self=self, form_uid=form_uid),
+                        edit=functools.partial(
+                            edit,
+                            self=self,
+                            query=chosen_inline_query,
+                            form=form,
+                            form_uid=form_uid,
+                        ),
                     )
 
                     try:
