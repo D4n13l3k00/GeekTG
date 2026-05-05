@@ -22,9 +22,13 @@ import telethon
 from telethon.tl.functions.channels import GetParticipantRequest
 from telethon.tl.functions.messages import GetFullChatRequest
 
-from . import main
-
 logger = logging.getLogger(__name__)
+
+# Stable key used in `db["friendly_telegram.main"]["blacklist_users"]`.
+# Hard-coded instead of ``from . import main`` to avoid a
+# security ↔ main ↔ loader ↔ security import cycle. Tests collect
+# security in isolation; the cycle would otherwise prevent that.
+_MAIN_NS = "friendly_telegram.main"
 
 OWNER = 1 << 0
 SUDO = 1 << 1
@@ -217,7 +221,7 @@ class SecurityManager:
         if f_support and message.sender_id in self._support:
             return True
 
-        if message.sender_id in self._db.get(main.__name__, "blacklist_users", []):
+        if message.sender_id in self._db.get(_MAIN_NS, "blacklist_users", []):
             return False
 
         if f_pm and message.is_private:

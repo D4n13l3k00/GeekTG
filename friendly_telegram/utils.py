@@ -109,11 +109,16 @@ def get_args_raw(message):
 
 
 def get_args_split_by(message, sep):
-    """Split args with a specific sep"""
-    raw = get_args_raw(message)
-    mess = raw.split(sep)
+    """Split args by ``sep``, strip each section, drop blanks.
 
-    return [section.strip() for section in mess if section]
+    The ``if section`` filter previously ran *before* the strip so a
+    section consisting of only whitespace ("foo | | bar") would survive
+    as an empty string in the output. Filter post-strip so callers can
+    rely on "no blanks" actually meaning that.
+    """
+    raw = get_args_raw(message)
+    return [stripped for section in raw.split(sep)
+            if (stripped := section.strip())]
 
 
 def get_chat_id(message):
@@ -635,7 +640,14 @@ async def get_target(message, arg_no=0):
 
 
 def merge(a, b):
-    """Merge with replace dictionary a to dictionary b"""
+    """Merge dict ``a`` into dict ``b`` (in-place); return ``b``.
+
+    Recursive for nested dicts, set-union for parallel lists, otherwise
+    ``a`` overwrites ``b``. The previous implementation had a stray
+    ``b[key] = a[key]`` outside the conditional that overwrote the fancy
+    merge result on every key, effectively reducing ``merge`` to
+    ``b.update(a)``.
+    """
     for key in a:
         if key in b:
             if isinstance(a[key], dict) and isinstance(b[key], dict):
@@ -644,7 +656,6 @@ def merge(a, b):
                 b[key] = list(set(b[key] + a[key]))
             else:
                 b[key] = a[key]
-
-        b[key] = a[key]
-
+        else:
+            b[key] = a[key]
     return b

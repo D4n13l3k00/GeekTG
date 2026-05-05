@@ -49,6 +49,16 @@ media = [
     "moviepy",
     "numpy",
 ]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "pytest-mock>=3.12",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
 
 [project.scripts]
 gtg = "friendly_telegram.__main__:_cli"
