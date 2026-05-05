@@ -5,12 +5,9 @@ file that defines one class with userbot commands, message watchers, inline
 handlers and persistent state. The loader picks them up at startup or on
 demand via `.loadmod`.
 
-This doc covers the canonical module layout, the lifecycle, every helper
-the framework exposes, and the small foot-guns that aren't obvious from the
-code.
-
-> Russian-language legacy notes live in [`mods.md`](mods.md). The page you're
-> reading supersedes them.
+This doc covers the canonical module layout, the lifecycle, and the small
+foot-guns that aren't obvious from the code. Topics with their own pages
+(inline forms, security, database, utils) are linked inline.
 
 ---
 
@@ -21,16 +18,15 @@ code.
 3. [Lifecycle hooks](#lifecycle-hooks)
 4. [Commands](#commands)
 5. [Watchers (passive handlers)](#watchers-passive-handlers)
-6. [Inline manager: forms, galleries, callbacks](#inline-manager-forms-galleries-callbacks)
+6. [Inline manager](#inline-manager) — see also **[inline.md](inline.md)**
 7. [Strings and translations](#strings-and-translations)
 8. [Config (`ModuleConfig`)](#config-moduleconfig)
-9. [Database](#database)
-10. [Asset storage](#asset-storage)
-11. [The `utils` cheatsheet](#the-utils-cheatsheet)
-12. [Security: how command permissions work](#security-how-command-permissions-work)
-13. [Module headers and metadata directives](#module-headers-and-metadata-directives)
-14. [Distribution and loading](#distribution-and-loading)
-15. [Best practices and pitfalls](#best-practices-and-pitfalls)
+9. [Database and assets](#database-and-assets) — see **[database.md](database.md)**
+10. [Utils cheatsheet](#utils-cheatsheet) — see **[utils.md](utils.md)**
+11. [Security](#security) — see **[security.md](security.md)**
+12. [Module headers and metadata directives](#module-headers-and-metadata-directives)
+13. [Distribution and loading](#distribution-and-loading)
+14. [Best practices and pitfalls](#best-practices-and-pitfalls)
 
 ---
 
@@ -81,7 +77,7 @@ That's everything required: a `loader.Module` subclass whose name ends with
 
 ## Anatomy of a module
 
-```
+```text
 ┌────────────────────────────────┐
 │  metadata directives           │  # meta developer:, # requires:, # scope:
 ├────────────────────────────────┤
@@ -149,7 +145,7 @@ Conventions used by `.help` and the framework:
 
 - The **docstring** is the help text. Keep it ≤ 1 line.
 - A `<args>` placeholder convention helps users: `"""<text> — Echo back."""`.
-- Prefix the method with a [security decorator](#security-how-command-permissions-work) unless
+- Prefix the method with a [security decorator](security.md#decorators) unless
   the command is genuinely safe for *anyone in any chat* (then
   `@loader.unrestricted`).
 - Always reply via `utils.answer(message, …)` — it edits when the bot is the
@@ -188,13 +184,11 @@ Throw exceptions liberally — they are logged and don't crash the dispatcher.
 
 ---
 
-## Inline manager: forms, galleries, callbacks
+## Inline manager
 
 The inline manager (`self.inline`, available after `client_ready`) lets your
 module render Telegram inline keyboards backed by an automatic `@BotFather`
-bot.
-
-### Inline forms
+bot — forms, galleries, `*_inline_handler` and `*_callback_handler` methods.
 
 ```python
 @loader.owner
@@ -206,54 +200,29 @@ async def menucmd(self, message: Message):
             [{"text": "🟢 Yes", "callback": self._yes}],
             [{"text": "🔴 No",  "callback": self._no}],
         ],
-        ttl=300,                 # seconds, default 24 h
-        force_me=True,           # only the userbot owner can press
+        ttl=300,
+        force_me=True,
     )
 
-async def _yes(self, call):
+async def _yes(self, call):     # call: friendly_telegram.inline.types.InlineCall
     await call.answer("You said yes!")
     await call.edit("✅ Confirmed.")
 ```
 
-Each row is a list of buttons. A button is a dict with one of:
+Form callbacks receive an `InlineCall` wrapper (not a raw aiogram
+`CallbackQuery` — aiogram-3 events are frozen pydantic models). On it:
 
-- `callback` — a coroutine `async def(call)`; receives an aiogram `CallbackQuery`.
-- `url` — open URL.
-- `input` — start a one-shot text-input flow; pair with `handler` callback.
+- `call.delete()` / `call.unload()` / `call.edit(...)` / `call.form` — our
+  form-stateful helpers.
+- Native aiogram attributes (`call.answer`, `call.from_user`, `call.data`,
+  `call.message`, `call.bot`, …) are delegated through.
 
-### Inline galleries
+Use `self.inline.bot` (a normal `aiogram.Bot`) when you need to call the Bot
+API directly.
 
-```python
-await self.inline.gallery(
-    message=message,
-    caption=lambda i: f"Page {i + 1}",
-    next_handler=self._next_page,    # async (i) -> str | bytes (URL or photo)
-    init_state=0,
-    force_me=True,
-)
-```
-
-### Inline-mode handlers
-
-Methods ending with `_inline_handler` answer the bot's `inline_query`:
-
-```python
-async def myquery_inline_handler(self, query):
-    if not query.query.startswith("hello"):
-        return
-    await query.answer([
-        InlineQueryResultArticle(
-            id=str(uuid.uuid4()),
-            title="Say hi",
-            input_message_content=InputTextMessageContent("hi!"),
-        )
-    ])
-```
-
-Methods ending with `_callback_handler` receive callback queries that
-weren't bound to a specific form button.
-
-See [`inline.md`](inline.md) for legacy notes on the inline API.
+The full reference — button types, gallery / `_inline_handler` /
+`_callback_handler` examples, the v2-→-v3 migration notes — lives in
+**[inline.md](inline.md)**.
 
 ---
 
@@ -338,228 +307,52 @@ persisted in the database under the module's `__module__` namespace.
 
 ---
 
-## Database
+## Database and assets
 
-A small async-friendly key-value store (JSON file under
-`~/.local/share/friendly-telegram/config-<user_id>.json`).
+JSON KV store + binary blob storage. Use `db.get(__name__, key, default)` /
+`db.set(__name__, key, value)` for module-private state, `db.store_asset()` /
+`db.fetch_asset()` for media.
 
 ```python
 async def client_ready(self, client, db):
     self._db = db
-
-    counter = self._db.get(__name__, "counter", 0)
-    self._db.set(__name__, "counter", counter + 1)
+    self._db.set(__name__, "counter", self._db.get(__name__, "counter", 0) + 1)
 ```
 
-Conventions:
-
-- **First argument** (`owner`): use `__name__` for module-private data so
-  uninstalling the module is a clean delete.
-- **Values** must be JSON-serializable.
-- `db.set` is *not* async — it returns a future you can await if you need to
-  block until the next flush:
-
-  ```python
-  await self._db.set(__name__, "k", v)   # waits for the on-disk write
-  self._db.set(__name__, "k", v)         # fire-and-forget (typical)
-  ```
-
-Writes are batched and flushed every 10 s, so don't worry about hammering it.
-
-Cross-module reads are allowed but keep them rare and document the contract.
+Full reference: **[database.md](database.md)**.
 
 ---
 
-## Asset storage
+## Utils cheatsheet
 
-`db.store_asset()` and `db.fetch_asset()` are for binary blobs that don't fit
-in JSON (pictures, voice notes, archives). Storage is local since the cloud
-backend was removed.
-
-```python
-asset_id = await self._db.store_asset(b"...")            # bytes
-asset_id = await self._db.store_asset("/tmp/cat.jpg")    # path
-asset_id = await self._db.store_asset(message)           # Telethon Message
-self._db.set(__name__, "cat_id", asset_id)
-
-raw = await self._db.fetch_asset(self._db.get(__name__, "cat_id"))  # bytes
-```
-
-> **Migration note**: in older FTG versions `fetch_asset` returned a
-> Telethon `Message`. Local storage returns raw bytes. If you need to send
-> them onward, pass them to `client.send_file(chat, file=raw)`.
-
-Files live under `~/.local/share/friendly-telegram/assets/<user_id>/<id>.bin`.
+`from friendly_telegram import utils` exposes `answer`, `get_args`,
+`escape_html`, `get_chat_id`, `run_sync`, `merge`, `rand`, `get_data_dir`,
+`install_requirements`, `get_platform_name`, and a few more. The full table
+with one-line descriptions: **[utils.md](utils.md)**.
 
 ---
 
-## The `utils` cheatsheet
-
-Imported as `from friendly_telegram import utils`.
-
-| Helper | Purpose |
-| ------ | ------- |
-| `answer(message, text, **kwargs)` | Edit if our message, reply otherwise. Returns a list of resulting messages. |
-| `get_args(message)` / `get_args_raw` | Parsed / raw argument string. |
-| `get_args_split_by(message, sep)` | Split by custom separator. |
-| `get_chat_id(message)` | Numeric chat ID without the `-100` channel prefix. |
-| `get_target(message, arg_no=0)` | Resolve a user from reply / username / arg / ID. Returns `int` or `None`. |
-| `get_user(message)` | Sender as a Telethon `User`. Resolves cache misses. |
-| `escape_html(text)` | Escape `<`, `>`, `&`. |
-| `escape_quotes(text)` | Same plus `"`. |
-| `get_base_dir()` | Installed package directory (read-only). |
-| `get_data_dir()` | Writable data directory (sessions, configs, modules, assets). |
-| `get_platform_name()` | Display name for `.info` ("📻 VDS", "📱 Termux", …). Honors `$GTG_PLATFORM`. |
-| `run_sync(func, *a, **k)` | Run a blocking call in the default executor. |
-| `relocate_entities(entities, offset, text=None)` | Adjust message-entity offsets after slicing text. |
-| `merge(a, b)` | Deep-merge two dicts. |
-| `rand(n)` | Random alphanumeric string of length *n*. |
-| `install_requirements(pkgs, user_install=False)` | Pip-install at runtime, picks `uv pip` when available. |
-| `print_web_urls(port)` | Pretty-print all reachable URLs (used at startup). |
-
-For full signatures, read [`friendly_telegram/utils.py`](../friendly_telegram/utils.py).
-
----
-
-## Security: how command permissions work
+## Security
 
 Permissions are a **13-bit bitmask** stored on each command function as
-`func.security`. Before dispatching the command, `SecurityManager.check()`
-([`friendly_telegram/security.py`](../friendly_telegram/security.py))
-combines that mask with runtime overrides and decides whether the caller
-is allowed.
-
-### The 13 flags
-
-| Flag | Meaning |
-| ---- | ------- |
-| `OWNER` | The userbot account itself, plus user IDs in the `owner` group. |
-| `SUDO` | User IDs in the `sudo` group. |
-| `SUPPORT` | User IDs in the `support` group. |
-| `GROUP_OWNER` | Creator of the chat/channel where the command was sent. |
-| `GROUP_ADMIN_ADD_ADMINS` / `..._CHANGE_INFO` / `..._BAN_USERS` / `..._DELETE_MESSAGES` / `..._PIN_MESSAGES` / `..._INVITE_USERS` | Admin who has the matching Telegram admin right. |
-| `GROUP_ADMIN` | Any admin (no specific right required). |
-| `GROUP_MEMBER` | Any participant of the current group. |
-| `PM` | Private messages only. |
-
-### Decorators
-
-Each decorator just sets a bit on `func.security`. They are additive
-(`@loader.sudo` is `OWNER | SUDO`, not just `SUDO`).
-
-| Decorator | Bits set |
-| --------- | -------- |
-| `@loader.owner` | `OWNER` |
-| `@loader.sudo` | `OWNER \| SUDO` |
-| `@loader.support` | `OWNER \| SUDO \| SUPPORT` |
-| `@loader.group_owner` | `OWNER \| SUDO \| GROUP_OWNER` |
-| `@loader.group_admin` | `OWNER \| SUDO \| GROUP_ADMIN` |
-| `@loader.group_admin_<right>` | `OWNER \| SUDO \| GROUP_ADMIN_<RIGHT>` |
-| `@loader.group_member` | `OWNER \| SUDO \| GROUP_MEMBER` |
-| `@loader.pm` | `OWNER \| SUDO \| PM` |
-| `@loader.unrestricted` | All 13 bits |
-
-Stacking is allowed — apply two decorators and their bits OR together:
+`func.security`, AND-ed with the global `bounding_mask` and possibly
+overridden per-command at runtime via `.security <command>`. Default for an
+undecorated command is `OWNER | SUDO`. Decorators set bits:
 
 ```python
+@loader.owner          # OWNER only
+@loader.sudo           # OWNER | SUDO
+@loader.unrestricted   # everyone
 @loader.group_admin_ban_users
 @loader.pm
 async def kickcmd(self, message): ...
 ```
 
-If you don't apply any decorator, the command falls back to
-`DEFAULT_PERMISSIONS` = `OWNER | SUDO`.
+Decorators stack (their bits OR together). `@loader.ratelimit` is
+orthogonal — it doesn't gate access, it only throttles.
 
-### Runtime overrides (per-command)
-
-The user can rebind any command's mask without restarting via
-`.security <command>` (an inline keyboard from the
-[`GeekSecurity`](../friendly_telegram/modules/geek_security.py) module).
-The override is stored at `db["security"]["masks"][f"{module}.{func}"]`
-and **replaces** the decorator value on every check. Your decorator is
-just the default — never assume it's still in effect at runtime.
-
-### Bounding mask (global ceiling)
-
-`db["security"]["bounding_mask"]` (default `OWNER | SUDO`) is AND-ed over
-the final mask of every command. If a bit is cleared here, no command
-honours it anywhere — useful for "lock everything down to owner-only"
-without touching individual commands. Configured via `.security` (with
-no argument).
-
-Effective mask:
-
-```text
-effective = (override or func.security or DEFAULT_PERMISSIONS) & bounding_mask
-```
-
-### User groups: `owner`, `sudo`, `support`
-
-Three lists of Telegram user IDs in the database:
-
-- `db["security"]["owner"]` — extra owners. The userbot account itself
-  is *always* treated as owner; this list is for adding co-owners.
-- `db["security"]["sudo"]` — sudoers. The userbot account is auto-added
-  on every check.
-- `db["security"]["support"]` — read-only/support users.
-
-Managed by:
-
-```text
-.owneradd / .ownerrm / .ownerlist
-.sudoadd  / .sudorm  / .sudolist
-.supportadd / .supportrm / .supportlist
-```
-
-Adding to any group goes through an inline confirmation prompt because
-it grants real access to the userbot.
-
-The lists are re-read from the DB on **every** permission check, so
-changes take effect immediately.
-
-### Decision flow
-
-When `SecurityManager.check(message, func)` runs:
-
-1. Compute the effective mask. If `0` → deny.
-2. If `OWNER` bit set and `sender_id` is the userbot or in `owner`
-   list → **allow**.
-3. Same for `SUDO`/`sudo` list and `SUPPORT`/`support` list.
-4. If `sender_id` is in `db["main"]["blacklist_users"]` → **deny**
-   (overrides everything below).
-5. If `PM` bit set and the message is a DM → **allow**.
-6. If `GROUP_MEMBER` bit set and the message is in a group → **allow**.
-7. Channel/supergroup: query the participant via
-   `GetParticipantRequest`, then:
-   - `ChannelParticipantCreator` satisfies `GROUP_OWNER`.
-   - `ChannelParticipantAdmin` satisfies `GROUP_ADMIN_<RIGHT>` only if
-     the participant's `admin_rights.<right>` is true. `GROUP_ADMIN`
-     matches any admin.
-   - The toggle `db["security"]["any_admin"]` (`False` by default)
-     loosens this so any admin satisfies any `GROUP_ADMIN_*` flag.
-8. Legacy chat: same idea with `GetFullChatRequest` /
-   `ChatParticipantCreator` / `ChatParticipantAdmin`.
-9. Otherwise → **deny** (and the dispatcher silently drops the command).
-
-### Picking the right decorator
-
-- **Mutating, sensitive, or account-wide commands** (eval, restart,
-  config, account settings): `@loader.owner` or `@loader.sudo`.
-- **Group moderation**: the matching `@loader.group_admin_*` so a
-  co-admin can use it where they have rights, and only there.
-- **Public read-only commands** (`.alive`, `.ping`, fun/info modules):
-  `@loader.unrestricted` *unless* you want them limited to your
-  contacts via the bounding mask.
-- **Anything that takes user input as a target** (e.g. fetch info about
-  another user): pair the decorator with `@loader.ratelimit` to make
-  it harder to abuse.
-
-### Rate limiting
-
-`@loader.ratelimit` is **orthogonal** to security — it enforces a
-per-user cooldown on top of whatever permission check applies. Always
-apply a security decorator as well; rate-limit alone does not gate
-access.
+Full reference (all 13 flags, decorators, decision flow, bounding mask, user
+groups): **[security.md](security.md)**.
 
 ---
 
@@ -640,8 +433,9 @@ on disk. To uninstall: `.unloadmod <ClassName>` (removes the file too).
   command parsing, security checks.
 - [`friendly_telegram/security.py`](../friendly_telegram/security.py) —
   permission predicates behind `@loader.owner` & friends.
-- [`friendly_telegram/inline.py`](../friendly_telegram/inline.py) — inline
-  forms, galleries, callback handling.
+- [`friendly_telegram/inline/`](../friendly_telegram/inline/) — inline
+  manager package: `manager.py` (lifecycle/dispatch), `types.py` (the
+  `InlineCall` wrapper, helpers).
 - [`friendly_telegram/modules/`](../friendly_telegram/modules/) — bundled
   core modules. Best living examples.
 
