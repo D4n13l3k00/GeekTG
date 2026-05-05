@@ -128,10 +128,16 @@ class UpdaterMod(loader.Module):
 
 
 def _restart_via_execl(*argv):
+    # ``python -m`` wants a module *name*, not a path. The previous
+    # ``os.path.relpath(get_base_dir())`` worked when cwd was the project
+    # root but produces dot-prefixed garbage for ``uv tool``/``pipx``-
+    # installed copies (e.g. ``.local/share/uv/tools/.../friendly_telegram``);
+    # CPython then rejects the invocation with
+    # ``Relative module names not supported`` and the process dies on exec.
     os.execl(
         sys.executable,
         sys.executable,
         "-m",
-        os.path.relpath(utils.get_base_dir()),
+        "friendly_telegram",
         *argv,
     )

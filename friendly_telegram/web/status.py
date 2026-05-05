@@ -319,7 +319,7 @@ class Web:
             sys.executable,
             sys.executable,
             "-m",
-            os.path.relpath(utils.get_base_dir()),
+            "friendly_telegram",
             *sys.argv[1:],
         ))
         # Nudge the loop to exit. SIGTERM is the same signal main.py's
