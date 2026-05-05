@@ -9,17 +9,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from friendly_telegram.web import core, status
+from friendly_telegram.web import core
 
 
 @pytest.fixture
 async def web_client(tmp_data_dir):
-    w = core.Web(api_token=None, data_root=str(tmp_data_dir),
-                 connection=None, hosting=False, default_app=False, proxy=None)
+    w = core.Web(
+        api_token=None,
+        data_root=str(tmp_data_dir),
+        connection=None,
+        hosting=False,
+        default_app=False,
+        proxy=None,
+    )
     # Plant something to back up
     (tmp_data_dir / "config.json").write_text('{"hello": "world"}')
     fake = MagicMock()
-    sent = MagicMock(); sent.id = 17
+    sent = MagicMock()
+    sent.id = 17
     fake.send_message = AsyncMock(return_value=sent)
     fake.delete_messages = AsyncMock()
     fake.log_out = AsyncMock(return_value=True)
@@ -32,6 +39,7 @@ async def web_client(tmp_data_dir):
 
 
 # ---------- /status ----------
+
 
 class TestStatusEndpoint:
     async def test_returns_json(self, web_client):
@@ -50,7 +58,9 @@ class TestStatusEndpoint:
         body = await (await cli.get("/status")).json()
         # No inline manager attached → configured=False
         assert body["bot"] == {
-            "configured": False, "ready": False, "username": None,
+            "configured": False,
+            "ready": False,
+            "username": None,
         }
 
     async def test_resources_disk_present(self, web_client):
@@ -65,6 +75,7 @@ class TestStatusEndpoint:
 
 # ---------- /ping (alias /is_restart_complete) ----------
 
+
 class TestPing:
     @pytest.mark.parametrize("path", ["/ping", "/is_restart_complete"])
     async def test_returns_200(self, web_client, path):
@@ -74,6 +85,7 @@ class TestPing:
 
 
 # ---------- /backup TG-code 2FA flow ----------
+
 
 class TestBackupGate:
     async def test_unauthenticated_get_rejected(self, web_client):
@@ -126,6 +138,7 @@ class TestBackupGate:
 
 # ---------- /restore: zip integrity + path traversal ----------
 
+
 class TestRestoreSafety:
     async def _confirm(self, cli, w):
         await cli.post("/restore/request")
@@ -135,12 +148,13 @@ class TestRestoreSafety:
     async def test_zip_round_trip(self, web_client):
         cli, w, _ = web_client
         # Backup → mutate → restore
-        token_b = (await self._setup_backup(cli, w))
+        token_b = await self._setup_backup(cli, w)
         zb = await (await cli.get(f"/backup?token={token_b}")).read()
         os.remove(os.path.join(w.ctx.effective_data_dir(), "config.json"))
 
         token_r = await self._confirm(cli, w)
         from aiohttp import FormData
+
         fd = FormData()
         fd.add_field("backup", zb, filename="b.zip", content_type="application/zip")
         r = await cli.post(f"/restore?token={token_r}", data=fd)
@@ -154,9 +168,11 @@ class TestRestoreSafety:
         with zipfile.ZipFile(evil, "w") as zf:
             zf.writestr("../etc/evil", "pwn")
         from aiohttp import FormData
+
         fd = FormData()
-        fd.add_field("backup", evil.getvalue(), filename="b.zip",
-                     content_type="application/zip")
+        fd.add_field(
+            "backup", evil.getvalue(), filename="b.zip", content_type="application/zip"
+        )
         r = await cli.post(f"/restore?token={token}", data=fd)
         assert r.status == 400
         assert "unsafe path" in (await r.text())
@@ -168,6 +184,7 @@ class TestRestoreSafety:
 
 
 # ---------- /logout: confirms its destructive plan ----------
+
 
 class TestLogout:
     async def test_unauthenticated_rejected(self, web_client):
@@ -186,9 +203,10 @@ class TestLogout:
             assert r.status == 200
             # Background task does the work — give it a tick
             import asyncio
+
             await asyncio.sleep(0.5)
 
-        fake.send_message.assert_awaited()        # goodbye message
-        fake.log_out.assert_awaited()             # session revoked
-        atexit_reg.assert_called()                # re-exec scheduled
-        kill.assert_called_once()                 # SIGTERM sent
+        fake.send_message.assert_awaited()  # goodbye message
+        fake.log_out.assert_awaited()  # session revoked
+        atexit_reg.assert_called()  # re-exec scheduled
+        kill.assert_called_once()  # SIGTERM sent

@@ -8,22 +8,27 @@ import pytest
 
 from friendly_telegram import loader
 
-
 # ---------- introspection helpers (pure functions) ----------
+
 
 class FakeMod:
     """A bare-bones module instance the loader can introspect."""
 
-    async def echocmd(self, message): pass
+    async def echocmd(self, message):
+        pass
 
-    async def picgallery_inline_handler(self, query): pass
+    async def picgallery_inline_handler(self, query):
+        pass
 
-    async def picgallery_callback_handler(self, call): pass
+    async def picgallery_callback_handler(self, call):
+        pass
 
     # Decoys: these must NOT be picked up
-    def helper(self): pass
+    def helper(self):
+        pass
 
-    async def cmd(self): pass  # too short, len <= 3
+    async def cmd(self):
+        pass  # too short, len <= 3
 
 
 class TestIntrospection:
@@ -47,6 +52,7 @@ class TestIntrospection:
 
 
 # ---------- dispatch: cmd lookup with keyboard-layout fallbacks ----------
+
 
 @pytest.fixture
 def modules():
@@ -88,6 +94,7 @@ class TestDispatch:
 
 
 # ---------- alias mutation ----------
+
 
 class TestAliasMutation:
     def test_add_alias_for_known_command(self, modules):

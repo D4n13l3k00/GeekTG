@@ -35,7 +35,7 @@ class _LegacyAliasFinder:
     def find_spec(cls, fullname, path=None, target=None):
         if fullname != _LEGACY and not fullname.startswith(_LEGACY + "."):
             return None
-        real_name = _REAL + fullname[len(_LEGACY):]
+        real_name = _REAL + fullname[len(_LEGACY) :]
         real_mod = _importlib.import_module(real_name)
         _sys.modules[fullname] = real_mod
         return _importlib.util.spec_from_loader(fullname, loader=None, origin=real_name)
@@ -49,6 +49,7 @@ class _LegacyAliasFinder:
 _sys.modules.setdefault(_LEGACY, _sys.modules[_REAL])
 
 # Install finder once.
-if not any(isinstance(f, _LegacyAliasFinder) or f is _LegacyAliasFinder
-           for f in _sys.meta_path):
+if not any(
+    isinstance(f, _LegacyAliasFinder) or f is _LegacyAliasFinder for f in _sys.meta_path
+):
     _sys.meta_path.append(_LegacyAliasFinder)

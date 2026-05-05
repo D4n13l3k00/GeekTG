@@ -1,9 +1,9 @@
 """
-    █ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
-    █▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
+█ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
+█▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
 
-    Copyright 2022 t.me/hikariatama
-    Licensed under the GNU GPLv3
+Copyright 2022 t.me/hikariatama
+Licensed under the GNU GPLv3
 """
 
 # meta pic: https://img.icons8.com/pastel-glyph/344/sun-glasses--v2.png
@@ -11,10 +11,12 @@
 # scope: geektg_only
 # meta developer: @hikariatama
 
-from .. import loader, utils, main
-from telethon.tl.types import Message
-from aiogram.types import CallbackQuery
 import logging
+
+from aiogram.types import CallbackQuery
+from telethon.tl.types import Message
+
+from .. import loader, main, utils
 
 logger = logging.getLogger(__name__)
 

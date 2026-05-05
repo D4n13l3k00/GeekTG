@@ -12,7 +12,6 @@ the user's actual data dir. Fixtures here provide hermetic substitutes:
 
 from __future__ import annotations
 
-import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -22,6 +21,7 @@ import pytest
 def tmp_data_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("GTG_DATA_DIR", str(tmp_path))
     from friendly_telegram import utils
+
     utils.get_data_dir.cache_clear()
     yield tmp_path
     utils.get_data_dir.cache_clear()
@@ -60,8 +60,15 @@ def fake_client():
     return c
 
 
-def make_message(text="", out=True, sender_id=42, chat_id=42, reply_to=None,
-                 entities=None, peer_id=None):
+def make_message(
+    text="",
+    out=True,
+    sender_id=42,
+    chat_id=42,
+    reply_to=None,
+    entities=None,
+    peer_id=None,
+):
     """Construct a Telethon-shaped Message stub.
 
     Kept as a free function (not a fixture) so tests can produce many

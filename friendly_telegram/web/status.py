@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 _RESOURCE_CACHE_TTL = 3.0
 _BACKUP_EXCLUDE_SUFFIXES = (".session-journal",)
 _RESTORE_MAX_BYTES = 64 * 1024 * 1024  # 64 MiB hard limit on uploads
-_BACKUP_CODE_TTL = 300                 # 5 min — TG-delivered code lifetime
-_BACKUP_TOKEN_TTL = 300                # action-token window after confirm (5 min)
+_BACKUP_CODE_TTL = 300  # 5 min — TG-delivered code lifetime
+_BACKUP_TOKEN_TTL = 300  # action-token window after confirm (5 min)
 
 
 def _try_psutil():
@@ -49,10 +49,10 @@ class _CodeGate:
     """
 
     def __init__(self, label: str, prompt: str):
-        self.label = label    # noun phrase: "скачивания бэкапа", "восстановления"
+        self.label = label  # noun phrase: "скачивания бэкапа", "восстановления"
         self.prompt = prompt  # extra explanatory line for the TG message
         self._pending = None  # dict|None: code, expires, msg_id, client
-        self._token = None    # dict|None: token, expires
+        self._token = None  # dict|None: token, expires
 
     async def request(self, client) -> bool:
         await self.discard()
@@ -84,8 +84,7 @@ class _CodeGate:
         try:
             await pending["client"].delete_messages("me", [pending["msg_id"]])
         except Exception:
-            logger.debug("code-gate %s: cleanup failed",
-                         self.label, exc_info=True)
+            logger.debug("code-gate %s: cleanup failed", self.label, exc_info=True)
 
     async def confirm(self, code: str):
         """Return ``("ok", token)`` or ``(error_str, None)``."""
@@ -142,18 +141,24 @@ class StatusRouter:
 
         ctx.backup_gate = _CodeGate(
             label="скачивания бэкапа",
-            prompt=("Введите этот код в веб-интерфейсе, чтобы подтвердить, "
-                    "что бэкап скачиваете именно вы."),
+            prompt=(
+                "Введите этот код в веб-интерфейсе, чтобы подтвердить, "
+                "что бэкап скачиваете именно вы."
+            ),
         )
         ctx.restore_gate = _CodeGate(
             label="восстановления из бэкапа",
-            prompt=("Введите этот код в веб-интерфейсе, чтобы подтвердить, "
-                    "что хотите перезаписать данные юзербота."),
+            prompt=(
+                "Введите этот код в веб-интерфейсе, чтобы подтвердить, "
+                "что хотите перезаписать данные юзербота."
+            ),
         )
         ctx.logout_gate = _CodeGate(
             label="выхода из юзербота",
-            prompt=("Введите этот код в веб-интерфейсе, чтобы завершить "
-                    "сессию Telegram и перезапустить юзербот."),
+            prompt=(
+                "Введите этот код в веб-интерфейсе, чтобы завершить "
+                "сессию Telegram и перезапустить юзербот."
+            ),
         )
 
     def register(self, app: web.Application) -> None:
@@ -202,11 +207,13 @@ class StatusRouter:
                     # populates an internal counter so subsequent calls are
                     # accurate. The 3-second cache amortises the warmup.
                     cpu = self._proc.cpu_percent(interval=None)
-                out.update({
-                    "available": True,
-                    "rss_bytes": int(rss),
-                    "cpu_percent": round(float(cpu), 1),
-                })
+                out.update(
+                    {
+                        "available": True,
+                        "rss_bytes": int(rss),
+                        "cpu_percent": round(float(cpu), 1),
+                    }
+                )
             except Exception:
                 logger.debug("psutil sample failed", exc_info=True)
 
@@ -228,17 +235,19 @@ class StatusRouter:
 
     async def status(self, request):
         sha, sha_url = utils.get_git_info()
-        return web.json_response({
-            "version": ".".join(map(str, __version__)),
-            "git": {"sha": sha, "url": sha_url},
-            "platform": utils.get_platform_name(),
-            "data_dir": self.ctx.effective_data_dir(),
-            "uptime_seconds": int(time.time() - self.ctx.started_at),
-            "started_at": int(self.ctx.started_at),
-            "resources": self._resources(),
-            "bot": self._bot_info(),
-            "authorized": bool(self.ctx.client_data),
-        })
+        return web.json_response(
+            {
+                "version": ".".join(map(str, __version__)),
+                "git": {"sha": sha, "url": sha_url},
+                "platform": utils.get_platform_name(),
+                "data_dir": self.ctx.effective_data_dir(),
+                "uptime_seconds": int(time.time() - self.ctx.started_at),
+                "started_at": int(self.ctx.started_at),
+                "resources": self._resources(),
+                "bot": self._bot_info(),
+                "authorized": bool(self.ctx.client_data),
+            }
+        )
 
     async def _gate_request(self, gate):
         client = self.ctx.first_authed_client()
@@ -318,14 +327,16 @@ class StatusRouter:
         # Re-exec ourselves once the asyncio loop unwinds. Mirrors what
         # modules/updater.py does on .restart, minus its TG-message
         # roundtrip (we just logged out — no client to talk to).
-        atexit.register(functools.partial(
-            os.execl,
-            sys.executable,
-            sys.executable,
-            "-m",
-            "friendly_telegram",
-            *sys.argv[1:],
-        ))
+        atexit.register(
+            functools.partial(
+                os.execl,
+                sys.executable,
+                sys.executable,
+                "-m",
+                "friendly_telegram",
+                *sys.argv[1:],
+            )
+        )
         # Nudge the loop to exit. SIGTERM is the same signal main.py's
         # graceful-shutdown handler installs in _async_main.
         os.kill(os.getpid(), signal.SIGTERM)
@@ -423,9 +434,8 @@ class StatusRouter:
                     if member.endswith("/"):
                         continue
                     target = os.path.realpath(os.path.join(data_dir, member))
-                    if (
-                        target != resolved_dir
-                        and not target.startswith(resolved_dir + os.sep)
+                    if target != resolved_dir and not target.startswith(
+                        resolved_dir + os.sep
                     ):
                         return web.Response(
                             status=400,

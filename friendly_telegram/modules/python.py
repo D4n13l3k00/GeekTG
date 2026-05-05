@@ -1,20 +1,22 @@
 """
-    █ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
-    █▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
+█ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
+█▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
 
-    Copyright 2022 t.me/hikariatama
-    Licensed under the GNU GPLv3
+Copyright 2022 t.me/hikariatama
+Licensed under the GNU GPLv3
 """
 
-import logging
-import telethon
-from meval import meval
-from .. import loader, utils, main
-from traceback import format_exc
 import itertools
+import logging
+from traceback import format_exc
 from types import ModuleType
-from telethon.tl.types import Message
+
+import telethon
 from aiogram.types import CallbackQuery
+from meval import meval
+from telethon.tl.types import Message
+
+from .. import loader, main, utils
 
 logger = logging.getLogger(__name__)
 

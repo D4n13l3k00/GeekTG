@@ -54,9 +54,7 @@ class InitialSetupRouter:
             await self.ctx.ready.wait()
         if self.ctx.redirect_url:
             self.ctx.root_redirected.set()
-            return web.Response(
-                status=302, headers={"Location": self.ctx.redirect_url}
-            )
+            return web.Response(status=302, headers={"Location": self.ctx.redirect_url})
         if self.ctx.client_data:
             # Past the auth gate — hand off to the dashboard renderer.
             return await self._root(request)
@@ -99,8 +97,10 @@ class InitialSetupRouter:
             return web.Response(status=400, text="invalid phone")
         # Use print(): main app logger is WARNING by default, INFO would be
         # eaten — and the user explicitly needs to see where the code went.
-        print(f"[setup] sending code to +{phone} (api_id={self.ctx.api_token.ID})",
-              flush=True)
+        print(
+            f"[setup] sending code to +{phone} (api_id={self.ctx.api_token.ID})",
+            flush=True,
+        )
         client = telethon.TelegramClient(
             telethon.sessions.MemorySession(),
             self.ctx.api_token.ID,

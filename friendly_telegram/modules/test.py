@@ -1,26 +1,23 @@
 """
-    █ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
-    █▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
+█ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
+█▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
 
-    Copyright 2022 t.me/hikariatama
-    Licensed under the GNU GPLv3
+Copyright 2022 t.me/hikariatama
+Licensed under the GNU GPLv3
 """
 
 # scope: inline_content
 
-import time
-
 import logging
+import time
 from io import BytesIO
-
-from .. import loader, utils
-
 from typing import Union
-from telethon.tl.types import Message
-
-from telethon.errors.rpcerrorlist import ChatSendInlineForbiddenError
 
 import aiogram
+from telethon.errors.rpcerrorlist import ChatSendInlineForbiddenError
+from telethon.tl.types import Message
+
+from .. import loader, utils
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +35,7 @@ class TestMod(loader.Module):
         "suspend_invalid_time": "🚫 <b>Invalid time to suspend</b>",
         "suspended": "🥶 <b>Bot suspended for</b> <code>{}</code> <b>seconds</b>",
         "results_ping": "⏱ <b>Ping:</b> <code>{}</code> <b>ms</b>",
-        "confidential":(
+        "confidential": (
             "⚠️ <b>Log level </b><code>{}</code><b> "
             "may reveal your confidential info, be careful</b>"
         ),

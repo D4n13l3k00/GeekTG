@@ -7,9 +7,7 @@
 """Initial entrypoint."""
 
 import getpass
-import os
 import sys
-
 
 _ROOT_OVERRIDE_FLAGS = {"--root", "--allow-root", "-R"}
 
@@ -37,8 +35,10 @@ def _cli():
         sys.exit(1)
 
     from . import log
+
     log.init()
     from . import main
+
     main.main()
 
 

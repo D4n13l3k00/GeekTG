@@ -20,10 +20,11 @@ import asyncio
 import collections
 import logging
 import re
-from telethon import types
 import traceback
 
-from . import utils, main, security, loader
+from telethon import types
+
+from . import loader, main, security, utils
 
 # Keys for layout switch
 ru_keys = """ёйцукенгшщзхъфывапролджэячсмитьбю.Ё"№;%:?ЙЦУКЕНГ
@@ -362,9 +363,7 @@ class CommandDispatcher:
                 logging.exception("Command failed")
                 if not self._db.get(main.__name__, "inlinelogs", True):
                     try:
-                        txt = (
-                            f"<b>🚫 Command</b> <code>{prefix}{utils.escape_html(message.message)}</code><b> failed!</b>"
-                        )
+                        txt = f"<b>🚫 Command</b> <code>{prefix}{utils.escape_html(message.message)}</code><b> failed!</b>"
                         await (message.edit if message.out else message.reply)(txt)
                     except Exception:
                         pass

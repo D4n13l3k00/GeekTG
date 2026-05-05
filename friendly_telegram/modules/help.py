@@ -1,19 +1,20 @@
 """
-    █ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
-    █▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
+█ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
+█▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
 
-    Copyright 2022 t.me/hikariatama
-    Licensed under the GNU GPLv3
+Copyright 2022 t.me/hikariatama
+Licensed under the GNU GPLv3
 """
 
 # meta pic: https://img.icons8.com/fluency/48/000000/chatbot.png
 
 import inspect
-from .. import loader, utils, main, security
-from telethon.tl.functions.channels import JoinChannelRequest
 import logging
 
+from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.types import Message
+
+from .. import loader, main, security, utils
 
 logger = logging.getLogger(__name__)
 

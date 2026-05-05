@@ -12,7 +12,6 @@ The class is still named ``CloudBackend`` so existing imports keep working.
 """
 
 import asyncio
-import json
 import logging
 import os
 from typing import Optional, Union
@@ -108,7 +107,9 @@ class CloudBackend:
         except FileNotFoundError:
             return None
 
-    async def _to_bytes(self, src: Union[bytes, str, "Message", "CustomMessage"]) -> bytes:
+    async def _to_bytes(
+        self, src: Union[bytes, str, "Message", "CustomMessage"]
+    ) -> bytes:
         if isinstance(src, (bytes, bytearray)):
             return bytes(src)
         if isinstance(src, str) and os.path.isfile(src):

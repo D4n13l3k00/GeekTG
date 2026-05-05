@@ -26,8 +26,16 @@ _STATIC_DIR = str(files("friendly_telegram.web").joinpath("static"))
 class Web:
     """Owns the aiohttp app and the runtime lifecycle of every router."""
 
-    def __init__(self, *, api_token=None, data_root=None, connection=None,
-                 hosting=False, default_app=False, proxy=None):
+    def __init__(
+        self,
+        *,
+        api_token=None,
+        data_root=None,
+        connection=None,
+        hosting=False,
+        default_app=False,
+        proxy=None,
+    ):
         self.ctx = WebContext(
             api_token=api_token,
             data_root=data_root,
@@ -55,7 +63,8 @@ class Web:
         self.root_router = RootRouter(self.ctx)
         self.status_router = StatusRouter(self.ctx)
         self.initial_router = InitialSetupRouter(
-            self.ctx, root_handler=self.root_router.root,
+            self.ctx,
+            root_handler=self.root_router.root,
         )
         self.root_router.register(self.app)
         self.status_router.register(self.app)
@@ -131,11 +140,11 @@ class Web:
 
     async def add_loader(self, client, loader, db):
         self.ctx.client_data[(await client.get_me(True)).user_id] = (
-            loader, client, db,
+            loader,
+            client,
+            db,
         )
 
     @staticmethod
     async def favicon(request):
-        return web.Response(
-            status=301, headers={"Location": "/static/bot_avatar.png"}
-        )
+        return web.Response(status=301, headers={"Location": "/static/bot_avatar.png"})

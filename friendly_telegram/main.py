@@ -18,9 +18,7 @@
 
 import argparse
 import asyncio
-import atexit
 import collections
-import functools
 import importlib
 import json
 import logging
@@ -30,20 +28,20 @@ import signal
 import socket
 import sqlite3
 import sys
-import time
 
 from telethon import TelegramClient, events
 from telethon.errors.rpcerrorlist import (
-    PhoneNumberInvalidError,
     ApiIdInvalidError,
     AuthKeyDuplicatedError,
+    PhoneNumberInvalidError,
 )
-from telethon.network.connection import ConnectionTcpFull
-from telethon.network.connection import ConnectionTcpMTProxyRandomizedIntermediate
-from telethon.sessions import StringSession, SQLiteSession
+from telethon.network.connection import (
+    ConnectionTcpFull,
+    ConnectionTcpMTProxyRandomizedIntermediate,
+)
+from telethon.sessions import SQLiteSession, StringSession
 
-from . import utils, loader
-from . import __version__
+from . import __version__, loader, utils
 from ._device import telethon_kwargs as _device_kwargs
 from .database import backend, frontend
 from .dispatcher import CommandDispatcher
@@ -127,7 +125,11 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--setup", "-s", action="store_true")
     parser.add_argument(
-        "--port", dest="port", action="store", default=None, type=int,
+        "--port",
+        dest="port",
+        action="store",
+        default=None,
+        type=int,
         help="Web port (default: random free port, persisted in config.json)",
     )
     parser.add_argument("--phone", "-p", action="append")
@@ -176,7 +178,9 @@ def parse_arguments():
         help="This is for internal use only. If you use it, things will go wrong.",
     )
     parser.add_argument(
-        "--root", "--allow-root", "-R",
+        "--root",
+        "--allow-root",
+        "-R",
         dest="disable_root_check",
         action="store_true",
         help="Disable `force_insecure` warning when launching as root",
@@ -310,8 +314,10 @@ class SuperList(list):
             raise AttributeError(attr)
         sample = getattr(self[0], attr)
         if asyncio.iscoroutinefunction(sample):
+
             async def fanout(*args, **kwargs):
                 return [await getattr(c, attr)(*args, **kwargs) for c in self]
+
             return fanout
         if callable(sample):
             return lambda *args, **kwargs: [
@@ -633,9 +639,7 @@ async def amain(first, client, allclients, web, arguments):
         await db.do_upload(json.dumps(pdb))
         return False
 
-    db = frontend.Database(
-        db
-    )
+    db = frontend.Database(db)
     await db.init()
 
     logging.debug("got db")
@@ -694,7 +698,10 @@ async def amain(first, client, allclients, web, arguments):
         build = f" build {sha[:7]}" if sha else ""
         logging.info(
             "🚀 GeekTG %s%s ready for user %d on %s",
-            version, build, me.user_id, utils.get_platform_name(),
+            version,
+            build,
+            me.user_id,
+            utils.get_platform_name(),
         )
 
     await client.run_until_disconnected()

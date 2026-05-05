@@ -52,7 +52,34 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "pytest-mock>=3.12",
+    "pre-commit>=3.7",
+    "ruff>=0.9",
+    "black>=25",
+    "isort>=6",
 ]
+
+[tool.black]
+line-length = 88
+target-version = ["py39"]
+
+[tool.isort]
+profile = "black"
+known_first_party = ["friendly_telegram"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+# Conservative defaults — pyflakes + a subset of pycodestyle. Don't fight
+# black on whitespace/line-length, and don't auto-rewrite stylistic things
+# the project hasn't opted into yet.
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # line length — black's job
+    "E741",  # ambiguous variable names ("l", "I") — already used in places
+]
+
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

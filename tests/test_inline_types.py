@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from friendly_telegram.inline import (
     InlineCall,
     array_sum,
