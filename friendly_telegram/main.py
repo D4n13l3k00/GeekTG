@@ -645,7 +645,7 @@ async def amain(first, client, allclients, web, arguments):
     logging.debug("got db")
     logging.info("Loading logging config...")
     for handler in handlers:
-        handler.setLevel(db.get(__name__, "loglevel", logging.WARNING))
+        handler.setLevel(db.get(__name__, "loglevel", logging.DEBUG))
 
     to_load = None
 

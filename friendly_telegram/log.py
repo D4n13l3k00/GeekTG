@@ -93,15 +93,10 @@ def init():
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     mem = MemoryHandler(handler, 2500)
-    mem.lvl = logging.INFO
+    mem.lvl = logging.DEBUG
 
     root = logging.getLogger()
     root.handlers = []
     root.addHandler(mem)
     root.setLevel(0)  # let handlers decide what's visible
     logging.captureWarnings(True)
-
-    # Telethon talks a lot at INFO — keep it on WARNING so our own stdout
-    # remains readable.
-    logging.getLogger("telethon").setLevel(logging.WARNING)
-    logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
