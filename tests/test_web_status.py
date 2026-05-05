@@ -86,7 +86,7 @@ class TestBackupGate:
         # Step 1: request → DB stores a code, message goes to Saved Messages
         r = await cli.post("/backup/request")
         assert r.status == 200
-        code = w._backup_gate._pending["code"]
+        code = w.ctx.backup_gate._pending["code"]
         assert len(code) == 6 and code.isdigit()
 
         # Step 2: confirm with the code → token returned
@@ -116,10 +116,10 @@ class TestBackupGate:
     async def test_expired_token_rejected(self, web_client):
         cli, w, _ = web_client
         await cli.post("/backup/request")
-        code = w._backup_gate._pending["code"]
+        code = w.ctx.backup_gate._pending["code"]
         token = (await (await cli.post("/backup/confirm", data=code)).json())["token"]
         # Hop over the TTL
-        w._backup_gate._token["expires"] = time.monotonic() - 1
+        w.ctx.backup_gate._token["expires"] = time.monotonic() - 1
         r = await cli.get(f"/backup?token={token}")
         assert r.status == 403
 
@@ -129,7 +129,7 @@ class TestBackupGate:
 class TestRestoreSafety:
     async def _confirm(self, cli, w):
         await cli.post("/restore/request")
-        code = w._restore_gate._pending["code"]
+        code = w.ctx.restore_gate._pending["code"]
         return (await (await cli.post("/restore/confirm", data=code)).json())["token"]
 
     async def test_zip_round_trip(self, web_client):
@@ -137,7 +137,7 @@ class TestRestoreSafety:
         # Backup → mutate → restore
         token_b = (await self._setup_backup(cli, w))
         zb = await (await cli.get(f"/backup?token={token_b}")).read()
-        os.remove(os.path.join(w._data_dir(), "config.json"))
+        os.remove(os.path.join(w.ctx.effective_data_dir(), "config.json"))
 
         token_r = await self._confirm(cli, w)
         from aiohttp import FormData
@@ -145,7 +145,7 @@ class TestRestoreSafety:
         fd.add_field("backup", zb, filename="b.zip", content_type="application/zip")
         r = await cli.post(f"/restore?token={token_r}", data=fd)
         assert r.status == 200, await r.text()
-        assert os.path.exists(os.path.join(w._data_dir(), "config.json"))
+        assert os.path.exists(os.path.join(w.ctx.effective_data_dir(), "config.json"))
 
     async def test_path_traversal_rejected(self, web_client):
         cli, w, _ = web_client
@@ -163,7 +163,7 @@ class TestRestoreSafety:
 
     async def _setup_backup(self, cli, w):
         await cli.post("/backup/request")
-        code = w._backup_gate._pending["code"]
+        code = w.ctx.backup_gate._pending["code"]
         return (await (await cli.post("/backup/confirm", data=code)).json())["token"]
 
 
@@ -178,7 +178,7 @@ class TestLogout:
     async def test_full_flow_calls_log_out_and_signals(self, web_client):
         cli, w, fake = web_client
         await cli.post("/logout/request")
-        code = w._logout_gate._pending["code"]
+        code = w.ctx.logout_gate._pending["code"]
         token = (await (await cli.post("/logout/confirm", data=code)).json())["token"]
 
         with patch("os.kill") as kill, patch("atexit.register") as atexit_reg:

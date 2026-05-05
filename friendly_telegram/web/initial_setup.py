@@ -1,22 +1,5 @@
-#    Friendly Telegram (telegram userbot)
-#    Copyright (C) 2018-2022 The Authors
+"""First-run wizard: API token + Telegram login flow."""
 
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU Affero General Public License as published by
-#    the Free Software Foundation, either version 3 of the License, or
-#    (at your option) any later version.
-
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU Affero General Public License for more details.
-
-#    You should have received a copy of the GNU Affero General Public License
-#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-#    Modded by GeekTG Team
-
-import asyncio
 import collections
 import logging
 import os
@@ -26,59 +9,67 @@ import aiohttp_jinja2
 import telethon
 from aiohttp import web
 
-logger = logging.getLogger(__name__)
-
 from .. import utils
 from .._device import telethon_kwargs as _device_kwargs
+from .context import WebContext
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = utils.get_data_dir()
 
 
-class Web:
-    def __init__(self, **kwargs):
-        self.api_token = kwargs.pop("api_token")
-        self.data_root = kwargs.pop("data_root")
-        self.connection = kwargs.pop("connection")
-        self.hosting = kwargs.pop("hosting")
-        self.default_app = kwargs.pop("default_app")
-        self.proxy = kwargs.pop("proxy")
-        self.redirect_url = None
-        super().__init__(**kwargs)
-        self.app.router.add_get("/initialSetup", self.initial_setup)
-        self.app.router.add_put("/setApi", self.set_tg_api)
-        self.app.router.add_post("/sendTgCode", self.send_tg_code)
-        self.app.router.add_post("/tgCode", self.tg_code)
-        self.app.router.add_post("/finishLogin", self.finish_login)
-        self.api_set = asyncio.Event()
-        self.sign_in_clients = {}
-        self.clients = []
-        self.clients_set = asyncio.Event()
-        self.root_redirected = asyncio.Event()
+class InitialSetupRouter:
+    """Wizard endpoints + the ``/`` dispatcher.
+
+    ``/`` is owned by this router because it has to decide between the
+    wizard and the post-auth dashboard based on whether any clients are
+    logged in. Handlers from ``RootRouter`` are called in-process when
+    we're past the auth gate.
+    """
+
+    def __init__(self, ctx: WebContext, root_handler):
+        self.ctx = ctx
+        self._root = root_handler  # bound RootRouter.root
+
+    def register(self, app: web.Application) -> None:
+        app.router.add_get("/", self.root)
+        app.router.add_get("/initialSetup", self.initial_setup)
+        app.router.add_put("/setApi", self.set_tg_api)
+        app.router.add_post("/sendTgCode", self.send_tg_code)
+        app.router.add_post("/tgCode", self.tg_code)
+        app.router.add_post("/finishLogin", self.finish_login)
+
+    # ---- public events for main.py to await ----------------------------
+
+    def wait_for_api_token_setup(self):
+        return self.ctx.api_set.wait()
+
+    def wait_for_clients_setup(self):
+        return self.ctx.clients_set.wait()
+
+    # ---- handlers ------------------------------------------------------
 
     async def root(self, request):
-        if self.clients_set.is_set():
-            await self.ready.wait()
-        if self.redirect_url:
-            self.root_redirected.set()
-            return web.Response(status=302, headers={"Location": self.redirect_url})
-        if self.client_data:
-            return await super().root(request)
+        if self.ctx.clients_set.is_set():
+            await self.ctx.ready.wait()
+        if self.ctx.redirect_url:
+            self.ctx.root_redirected.set()
+            return web.Response(
+                status=302, headers={"Location": self.ctx.redirect_url}
+            )
+        if self.ctx.client_data:
+            # Past the auth gate — hand off to the dashboard renderer.
+            return await self._root(request)
         return await self.initial_setup(request)
 
     @aiohttp_jinja2.template("initial_root.jinja2")
     async def initial_setup(self, request):
         return {
-            "api_done": self.api_token is not None,
-            "tg_done": bool(self.client_data),
-            "hosting": self.hosting,
-            "default_app": self.default_app,
+            "api_done": self.ctx.api_token is not None,
+            "tg_done": bool(self.ctx.client_data),
+            "hosting": self.ctx.hosting,
+            "default_app": self.ctx.default_app,
         }
-
-    def wait_for_api_token_setup(self):
-        return self.api_set.wait()
-
-    def wait_for_clients_setup(self):
-        return self.clients_set.wait()
 
     async def set_tg_api(self, request):
         text = await request.text()
@@ -91,14 +82,14 @@ class Web:
         ):
             return web.Response(status=400)
         with open(
-            os.path.join(self.data_root or BASE_DIR, "api_token.txt"),
+            os.path.join(self.ctx.data_root or BASE_DIR, "api_token.txt"),
             "w",
         ) as f:
             f.write(api_id + "\n" + api_hash)
-        self.api_token = collections.namedtuple("api_token", ("ID", "HASH"))(
+        self.ctx.api_token = collections.namedtuple("api_token", ("ID", "HASH"))(
             api_id, api_hash
         )
-        self.api_set.set()
+        self.ctx.api_set.set()
         return web.Response()
 
     async def send_tg_code(self, request):
@@ -108,14 +99,14 @@ class Web:
             return web.Response(status=400, text="invalid phone")
         # Use print(): main app logger is WARNING by default, INFO would be
         # eaten — and the user explicitly needs to see where the code went.
-        print(f"[setup] sending code to +{phone} (api_id={self.api_token.ID})",
+        print(f"[setup] sending code to +{phone} (api_id={self.ctx.api_token.ID})",
               flush=True)
         client = telethon.TelegramClient(
             telethon.sessions.MemorySession(),
-            self.api_token.ID,
-            self.api_token.HASH,
-            connection=self.connection,
-            proxy=self.proxy,
+            self.ctx.api_token.ID,
+            self.ctx.api_token.HASH,
+            connection=self.ctx.connection,
+            proxy=self.ctx.proxy,
             connection_retries=3,
             **_device_kwargs(),
         )
@@ -144,7 +135,7 @@ class Web:
         # the Telegram app, or wait for a call.
         ch = type(sent.type).__name__.replace("SentCodeType", "").lower()
         print(f"[setup] code accepted by Telegram, channel={ch}", flush=True)
-        self.sign_in_clients[phone] = client
+        self.ctx.sign_in_clients[phone] = client
         return web.Response(text=ch)
 
     async def tg_code(self, request):
@@ -163,7 +154,7 @@ class Web:
             or not phone
         ):
             return web.Response(status=400)
-        client = self.sign_in_clients[phone]
+        client = self.ctx.sign_in_clients[phone]
         if not password:
             try:
                 user = await client.sign_in(phone, code=code)
@@ -182,13 +173,13 @@ class Web:
                 return web.Response(status=403)  # Invalid 2FA password
             except telethon.errors.FloodWaitError:
                 return web.Response(status=421)
-        del self.sign_in_clients[phone]
+        del self.ctx.sign_in_clients[phone]
         client.phone = f"+{user.phone}"
-        self.clients.append(client)
+        self.ctx.clients.append(client)
         return web.Response()
 
     async def finish_login(self, request):
-        if not self.clients:
+        if not self.ctx.clients:
             return web.Response(status=400)
-        self.clients_set.set()
+        self.ctx.clients_set.set()
         return web.Response()

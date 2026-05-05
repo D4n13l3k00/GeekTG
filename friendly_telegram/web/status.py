@@ -1,4 +1,8 @@
-"""Status + backup/restore + logout endpoints."""
+"""Status + backup/restore + logout endpoints.
+
+Exposed as ``StatusRouter`` (composition-style) — register routes
+against a shared ``aiohttp.web.Application`` via ``.register(app)``.
+"""
 
 import asyncio
 import atexit
@@ -17,6 +21,7 @@ import zipfile
 from aiohttp import web
 
 from .. import __version__, utils
+from .context import WebContext
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +44,8 @@ def _try_psutil():
 class _CodeGate:
     """Single-slot 2FA: DM a code to Saved Messages, verify, mint a token.
 
-    Used to gate both backup downloads and restore uploads — anything
-    that touches the on-disk session bytes.
+    Used to gate backup downloads, restore uploads and logout — anything
+    that touches the on-disk session bytes or revokes the auth key.
     """
 
     def __init__(self, label: str, prompt: str):
@@ -102,7 +107,7 @@ class _CodeGate:
 
     def consume(self, presented: str) -> bool:
         """Validate the token. Stays usable until ``expires`` — not one-shot,
-        so a flaky download / retry within the 60-second window works."""
+        so a flaky download / retry within the window still works."""
         slot = self._token
         if slot is None:
             return False
@@ -127,46 +132,48 @@ def _data_dir_size(path: str) -> int:
     return total
 
 
-class Web:
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.app.router.add_get("/status", self.status)
-        self.app.router.add_post("/backup/request", self.backup_request)
-        self.app.router.add_post("/backup/confirm", self.backup_confirm)
-        self.app.router.add_get("/backup", self.backup)
-        self.app.router.add_post("/restore/request", self.restore_request)
-        self.app.router.add_post("/restore/confirm", self.restore_confirm)
-        self.app.router.add_post("/restore", self.restore)
-        self.app.router.add_post("/logout/request", self.logout_request)
-        self.app.router.add_post("/logout/confirm", self.logout_confirm)
-        self.app.router.add_post("/logout", self.logout_perform)
+class StatusRouter:
+    """Mounts /status, backup/restore/logout endpoints on a shared app."""
+
+    def __init__(self, ctx: WebContext):
+        self.ctx = ctx
         self._resource_cache = (0.0, None)
         self._proc = None  # lazy psutil.Process
 
-        self._backup_gate = _CodeGate(
+        ctx.backup_gate = _CodeGate(
             label="скачивания бэкапа",
             prompt=("Введите этот код в веб-интерфейсе, чтобы подтвердить, "
                     "что бэкап скачиваете именно вы."),
         )
-        self._restore_gate = _CodeGate(
+        ctx.restore_gate = _CodeGate(
             label="восстановления из бэкапа",
             prompt=("Введите этот код в веб-интерфейсе, чтобы подтвердить, "
                     "что хотите перезаписать данные юзербота."),
         )
-        self._logout_gate = _CodeGate(
+        ctx.logout_gate = _CodeGate(
             label="выхода из юзербота",
             prompt=("Введите этот код в веб-интерфейсе, чтобы завершить "
                     "сессию Telegram и перезапустить юзербот."),
         )
 
-    def _data_dir(self) -> str:
-        return self.data_root or utils.get_data_dir()
+    def register(self, app: web.Application) -> None:
+        app.router.add_get("/status", self.status)
+        app.router.add_post("/backup/request", self.backup_request)
+        app.router.add_post("/backup/confirm", self.backup_confirm)
+        app.router.add_get("/backup", self.backup)
+        app.router.add_post("/restore/request", self.restore_request)
+        app.router.add_post("/restore/confirm", self.restore_confirm)
+        app.router.add_post("/restore", self.restore)
+        app.router.add_post("/logout/request", self.logout_request)
+        app.router.add_post("/logout/confirm", self.logout_confirm)
+        app.router.add_post("/logout", self.logout_perform)
+
+    # ---- helpers -------------------------------------------------------
 
     def _bot_info(self):
-        """Return inline-bot status for the first client, if available."""
-        if not self.client_data:
+        loader = self.ctx.first_loader()
+        if loader is None:
             return {"configured": False, "ready": False, "username": None}
-        loader = next(iter(self.client_data.values()))[0]
         inline = getattr(loader, "inline", None)
         if inline is None:
             return {"configured": False, "ready": False, "username": None}
@@ -203,7 +210,7 @@ class Web:
             except Exception:
                 logger.debug("psutil sample failed", exc_info=True)
 
-        data_dir = self._data_dir()
+        data_dir = self.ctx.effective_data_dir()
         try:
             usage = shutil.disk_usage(data_dir)
             out["disk"] = {
@@ -217,27 +224,24 @@ class Web:
         self._resource_cache = (now, out)
         return out
 
+    # ---- handlers ------------------------------------------------------
+
     async def status(self, request):
         sha, sha_url = utils.get_git_info()
         return web.json_response({
             "version": ".".join(map(str, __version__)),
             "git": {"sha": sha, "url": sha_url},
             "platform": utils.get_platform_name(),
-            "data_dir": self._data_dir(),
-            "uptime_seconds": int(time.time() - self.started_at),
-            "started_at": int(self.started_at),
+            "data_dir": self.ctx.effective_data_dir(),
+            "uptime_seconds": int(time.time() - self.ctx.started_at),
+            "started_at": int(self.ctx.started_at),
             "resources": self._resources(),
             "bot": self._bot_info(),
-            "authorized": bool(self.client_data),
+            "authorized": bool(self.ctx.client_data),
         })
 
-    def _first_authed_client(self):
-        if not self.client_data:
-            return None
-        return next(iter(self.client_data.values()))[1]
-
     async def _gate_request(self, gate):
-        client = self._first_authed_client()
+        client = self.ctx.first_authed_client()
         if client is None:
             return web.json_response({"error": "no_client"}, status=503)
         ok = await gate.request(client)
@@ -256,22 +260,22 @@ class Web:
         return web.json_response({"error": result}, status=status)
 
     async def backup_request(self, request):
-        return await self._gate_request(self._backup_gate)
+        return await self._gate_request(self.ctx.backup_gate)
 
     async def backup_confirm(self, request):
-        return await self._gate_confirm(self._backup_gate, request)
+        return await self._gate_confirm(self.ctx.backup_gate, request)
 
     async def restore_request(self, request):
-        return await self._gate_request(self._restore_gate)
+        return await self._gate_request(self.ctx.restore_gate)
 
     async def restore_confirm(self, request):
-        return await self._gate_confirm(self._restore_gate, request)
+        return await self._gate_confirm(self.ctx.restore_gate, request)
 
     async def logout_request(self, request):
-        return await self._gate_request(self._logout_gate)
+        return await self._gate_request(self.ctx.logout_gate)
 
     async def logout_confirm(self, request):
-        return await self._gate_confirm(self._logout_gate, request)
+        return await self._gate_confirm(self.ctx.logout_gate, request)
 
     async def logout_perform(self, request):
         """Revoke Telegram session(s) and re-exec the process.
@@ -281,9 +285,9 @@ class Web:
         is intentionally preserved — the API credentials belong to the
         user, not the session.
         """
-        if not self._logout_gate.consume(request.query.get("token", "")):
+        if not self.ctx.logout_gate.consume(request.query.get("token", "")):
             return web.Response(status=403, text="confirmation required")
-        if not self.client_data:
+        if not self.ctx.client_data:
             return web.Response(status=503, text="no client")
 
         # Hand the actual logout off to a background task so we can flush
@@ -295,7 +299,7 @@ class Web:
         # Brief grace so aiohttp finishes writing the response.
         await asyncio.sleep(0.4)
 
-        for _loader, client, _db in list(self.client_data.values()):
+        for _loader, client, _db in list(self.ctx.client_data.values()):
             try:
                 await client.send_message(
                     "me",
@@ -331,10 +335,10 @@ class Web:
 
         Requires ``?token=`` from a successful /backup/confirm round-trip.
         """
-        if not self._backup_gate.consume(request.query.get("token", "")):
+        if not self.ctx.backup_gate.consume(request.query.get("token", "")):
             return web.Response(status=403, text="confirmation required")
 
-        data_dir = self._data_dir()
+        data_dir = self.ctx.effective_data_dir()
         if not os.path.isdir(data_dir):
             return web.Response(status=404, text="data dir missing")
 
@@ -370,15 +374,11 @@ class Web:
         client yet, e.g. fresh install) doesn't need TG confirmation
         because there's no account state to protect with.
 
-        Strategy: extract to a sibling ``.restore-tmp`` directory, validate
-        every member stays inside it, then move entries on top of the live
-        data dir. We do *not* wipe the existing dir first — if the zip is a
-        partial backup, the user keeps whatever wasn't overwritten. They
-        should restart the process afterwards (we can't safely hot-swap the
-        Telethon session while it's connected).
+        Path-traversal guarded: every member resolves under the data
+        dir or the whole archive is rejected.
         """
-        if self._first_authed_client() is not None:
-            if not self._restore_gate.consume(request.query.get("token", "")):
+        if self.ctx.first_authed_client() is not None:
+            if not self.ctx.restore_gate.consume(request.query.get("token", "")):
                 return web.Response(status=403, text="confirmation required")
 
         if not request.body_exists:
@@ -389,7 +389,7 @@ class Web:
         if field is None or field.name != "backup":
             return web.Response(status=400, text="missing 'backup' field")
 
-        data_dir = self._data_dir()
+        data_dir = self.ctx.effective_data_dir()
         os.makedirs(data_dir, exist_ok=True)
 
         # Buffer to disk so we don't blow up RAM on a multi-MB zip.
@@ -418,9 +418,6 @@ class Web:
                 return web.Response(status=400, text="not a zip")
 
             with zf:
-                # Path-traversal guard: every member, after normalisation,
-                # must resolve inside data_dir. Reject the whole archive on
-                # any miss.
                 resolved_dir = os.path.realpath(data_dir)
                 for member in zf.namelist():
                     if member.endswith("/"):
