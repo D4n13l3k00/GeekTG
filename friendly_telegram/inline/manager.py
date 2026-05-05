@@ -509,8 +509,13 @@ class InlineManager:
             if not hasattr(mod, "aiogram_watcher"):
                 continue
 
-            setattr(
-                message, "answer", functools.partial(answer, mod=self, message=message)
+            # aiogram 3 Telegram-objects are frozen pydantic models — bypass
+            # __setattr__ to keep the v2 contract of injecting helpers onto
+            # the event passed into module handlers.
+            object.__setattr__(
+                message,
+                "answer",
+                functools.partial(answer, mod=self, message=message),
             )
 
             try:
@@ -830,17 +835,29 @@ class InlineManager:
                         await query.answer("You are not allowed to press this button!")
                         return
 
-                    query.delete = functools.partial(
-                        delete, self=self, form=form, form_uid=form_uid
+                    # CallbackQuery is a frozen pydantic model in aiogram 3;
+                    # object.__setattr__ keeps the v2 contract where module
+                    # callbacks find these helpers on the event object.
+                    object.__setattr__(
+                        query,
+                        "delete",
+                        functools.partial(
+                            delete, self=self, form=form, form_uid=form_uid
+                        ),
                     )
-                    query.unload = functools.partial(
-                        unload, self=self, form_uid=form_uid
+                    object.__setattr__(
+                        query,
+                        "unload",
+                        functools.partial(unload, self=self, form_uid=form_uid),
                     )
-                    query.edit = functools.partial(
-                        edit, self=self, query=query, form=form, form_uid=form_uid
+                    object.__setattr__(
+                        query,
+                        "edit",
+                        functools.partial(
+                            edit, self=self, query=query, form=form, form_uid=form_uid
+                        ),
                     )
-
-                    query.form = {"id": form_uid, **form}
+                    object.__setattr__(query, "form", {"id": form_uid, **form})
 
                     try:
                         return await button["callback"](
