@@ -116,3 +116,60 @@ class TestAliasMutation:
 
     def test_remove_missing_returns_false(self, modules):
         assert modules.remove_alias("nope") is False
+
+
+# ---------- ModuleContext injection ----------
+
+
+class _CtxCapturingMod(loader.Module):
+    """A minimal module that records what was visible from ``client_ready``."""
+
+    def __init__(self):
+        self.seen_ctx = None
+        self.seen_client = None
+        self.seen_db = None
+
+    async def client_ready(self, client, db):
+        # ctx must already be populated by the time client_ready runs —
+        # that is the contract migrating modules will rely on.
+        self.seen_ctx = self.ctx
+        self.seen_client = client
+        self.seen_db = db
+
+
+class TestModuleContextInjection:
+    @pytest.mark.asyncio
+    async def test_ctx_populated_before_client_ready(self):
+        m = loader.Modules(use_inline=False)
+        mod = _CtxCapturingMod()
+        m.modules = [mod]
+        # send_ready installs the InlineManager; bypass it for the unit test
+        # by going straight to send_ready_one with a stub.
+        m.inline = object()
+        client = object()
+        db = object()
+        allclients = [client]
+
+        await m.send_ready_one(mod, client, db, allclients)
+
+        assert mod.seen_ctx is not None
+        assert mod.seen_ctx.client is client
+        assert mod.seen_ctx.db is db
+        assert mod.seen_ctx.inline is m.inline
+        assert mod.seen_ctx.modules is m
+        assert list(mod.seen_ctx.allclients) == [client]
+
+    @pytest.mark.asyncio
+    async def test_ctx_is_frozen(self):
+        # Misbehaving modules must not be able to swap the loader's view
+        # of the world by mutating the bundle.
+        from dataclasses import FrozenInstanceError
+
+        m = loader.Modules(use_inline=False)
+        mod = _CtxCapturingMod()
+        m.modules = [mod]
+        m.inline = object()
+        await m.send_ready_one(mod, object(), object(), [])
+
+        with pytest.raises(FrozenInstanceError):
+            mod.ctx.client = object()
