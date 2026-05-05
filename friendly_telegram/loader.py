@@ -23,12 +23,12 @@ import functools
 import importlib
 import importlib.util
 import inspect
+import json
 import logging
 import os
 import sys
-import json
 
-from . import utils, security, inline
+from . import inline, security, utils
 from .translations.dynamic import Strings
 
 
@@ -39,13 +39,16 @@ class LoadError(Exception):
     def __str__(self) -> str:
         return self._error
 
+
 class ModUnload(Exception):
     """Silent module unloading."""
+
     def __init__(self, error_message):  # skipcq: PYL-W0231
         self._error = error_message
 
     def __str__(self) -> str:
         return self._error
+
 
 def use_fs_for_modules():
     try:
@@ -284,9 +287,9 @@ class Modules:
         """Register single module from importlib spec"""
 
         module = importlib.util.module_from_spec(spec)
-        sys.modules[
-            module_name
-        ] = module  # Do this early for the benefit of RaphielGang compat layer
+        sys.modules[module_name] = (
+            module  # Do this early for the benefit of RaphielGang compat layer
+        )
         spec.loader.exec_module(module)
         ret = None
 

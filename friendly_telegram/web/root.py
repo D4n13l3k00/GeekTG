@@ -19,7 +19,7 @@ def _mask_phone(phone: str) -> str:
     digits = "".join(c for c in phone if c.isdigit())
     if len(digits) < 4:
         return f"+{digits}"
-    head = digits[:1]      # country code first digit (good enough for masking)
+    head = digits[:1]  # country code first digit (good enough for masking)
     tail = digits[-2:]
     return f"+{head}{'*' * (len(digits) - 3)}{tail}"
 
@@ -74,8 +74,11 @@ class RootRouter:
     async def me_avatar(self, request):
         if self.ctx.avatar_cache is not None:
             body, ctype = self.ctx.avatar_cache
-            return web.Response(body=body, content_type=ctype,
-                                headers={"Cache-Control": "public, max-age=300"})
+            return web.Response(
+                body=body,
+                content_type=ctype,
+                headers={"Cache-Control": "public, max-age=300"},
+            )
         client = self.ctx.first_authed_client()
         if client is None:
             return web.Response(status=503)
@@ -90,8 +93,11 @@ class RootRouter:
             return web.Response(status=404)
         # Telethon writes JPEG by default for profile photos.
         self.ctx.avatar_cache = (body, "image/jpeg")
-        return web.Response(body=body, content_type="image/jpeg",
-                            headers={"Cache-Control": "public, max-age=300"})
+        return web.Response(
+            body=body,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=300"},
+        )
 
     @aiohttp_jinja2.template("root.jinja2")
     async def root(self, request):

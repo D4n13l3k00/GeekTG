@@ -1,7 +1,7 @@
 """Helpers for the InlineManager: light-weight wrappers and the
-``edit`` / ``delete`` / ``unload`` / ``answer`` / ``custom_next_handler``
-functions that get bound onto callback / inline-query objects via
-``functools.partial(self=manager, ...)``.
+``edit`` / ``delete`` / ``unload`` / ``custom_next_handler`` functions
+bound onto ``InlineCall`` instances via ``functools.partial(self=manager,
+...)``.
 
 These are stateless on their own — they receive the manager instance
 through the ``self`` kwarg at call time, so they're safe to live in
@@ -16,15 +16,30 @@ from importlib.resources import files
 from types import FunctionType
 from typing import Any, List, Union
 
-import aiogram
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQuery,
     InputMediaPhoto,
-    Message as AiogramMessage,
+    LinkPreviewOptions,
 )
+from aiogram.types import Message as AiogramMessage
+
+
+def _is_not_modified(exc: TelegramBadRequest) -> bool:
+    return "message is not modified" in (exc.message or "").lower()
+
+
+def _is_invalid_query(exc: TelegramBadRequest) -> bool:
+    msg = (exc.message or "").lower()
+    return "query is too old" in msg or "query_id_invalid" in msg
+
+
+def _is_message_id_invalid(exc: TelegramBadRequest) -> bool:
+    return "message_id_invalid" in (exc.message or "").lower()
+
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +71,7 @@ def _load_avatar() -> "io.BytesIO":
         except (FileNotFoundError, ModuleNotFoundError, OSError):
             logger.warning("Bundled avatar not found, downloading from GitHub")
             import requests
+
             _avatar_bytes = requests.get(_AVATAR_URL, timeout=10).content
     buf = io.BytesIO(_avatar_bytes)
     buf.name = "avatar.png"
@@ -63,16 +79,47 @@ def _load_avatar() -> "io.BytesIO":
 
 
 class InlineCall:
-    def __init__(self):
-        self.delete = None
-        self.unload = None
-        self.edit = None
-        super().__init__()
+    """Wrapper passed to form/button callbacks instead of the raw event.
+
+    Why a wrapper: aiogram 3 ``CallbackQuery`` / ``ChosenInlineResult``
+    are frozen pydantic models — we cannot stick our own ``edit`` /
+    ``delete`` / ``unload`` / ``form`` helpers onto them. So we keep the
+    helpers on this object and delegate everything else (``data``,
+    ``from_user``, ``message``, ``answer``, ``id``, …) through
+    ``__getattr__`` to the underlying event.
+
+    Module callbacks see the same surface as before — ``call.data``,
+    ``await call.edit(...)``, ``await call.answer("ok")``.
+    """
+
+    def __init__(
+        self,
+        event=None,
+        delete=None,
+        unload=None,
+        edit=None,
+        form=None,
+    ):
+        self.__dict__["_event"] = event
+        self.delete = delete
+        self.unload = unload
+        self.edit = edit
+        self.form = form
+
+    def __getattr__(self, name: str):
+        # __getattr__ is only invoked when normal lookup fails, so our own
+        # ``delete`` / ``edit`` / etc. shadow the underlying event's
+        # attributes (which is the whole point: we override ``edit`` with
+        # our markup-aware helper while still delegating ``data``,
+        # ``from_user``, etc.).
+        event = self.__dict__.get("_event")
+        if event is None:
+            raise AttributeError(name)
+        return getattr(event, name)
 
 
 class BotMessage(AiogramMessage):
-    def __init__(self):
-        super().__init__()
+    pass
 
 
 class GeekInlineQuery:
@@ -148,31 +195,44 @@ async def edit(
         form["always_allow"] = always_allow
     try:
         await self.bot.edit_message_text(
-            text,
+            text=text,
             inline_message_id=inline_message_id or query.inline_message_id,
-            parse_mode="HTML",
-            disable_web_page_preview=disable_web_page_preview,
+            link_preview_options=LinkPreviewOptions(
+                is_disabled=disable_web_page_preview
+            ),
             reply_markup=self._generate_markup(form_uid),
         )
-    except aiogram.utils.exceptions.MessageNotModified:
-        try:
-            await query.answer()
-        except aiogram.utils.exceptions.InvalidQueryID:
-            pass  # Preloader removal — ignore "query gone" errors
-    except aiogram.utils.exceptions.RetryAfter as e:
-        logger.info(f"Sleeping {e.timeout}s on aiogram FloodWait...")
-        await asyncio.sleep(e.timeout)
+    except TelegramRetryAfter as e:
+        logger.info(f"Sleeping {e.retry_after}s on aiogram FloodWait...")
+        await asyncio.sleep(e.retry_after)
         return await edit(
-            text, reply_markup, force_me, always_allow, self,
-            query, form, form_uid, inline_message_id,
+            text,
+            reply_markup,
+            force_me,
+            always_allow,
+            self,
+            query,
+            form,
+            form_uid,
+            inline_message_id,
         )
-    except aiogram.utils.exceptions.MessageIdInvalid:
-        try:
-            await query.answer(
-                "I should have edited some message, but it is deleted :("
-            )
-        except aiogram.utils.exceptions.InvalidQueryID:
-            pass
+    except TelegramBadRequest as e:
+        if _is_not_modified(e):
+            try:
+                await query.answer()
+            except TelegramBadRequest as e2:
+                if not _is_invalid_query(e2):
+                    raise
+        elif _is_message_id_invalid(e):
+            try:
+                await query.answer(
+                    "I should have edited some message, but it is deleted :("
+                )
+            except TelegramBadRequest as e2:
+                if not _is_invalid_query(e2):
+                    raise
+        else:
+            raise
 
 
 async def custom_next_handler(
@@ -198,8 +258,11 @@ async def custom_next_handler(
         await call.answer("No photos left", show_alert=True)
         return
 
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Next ➡️", callback_data=btn_call_data))
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Next ➡️", callback_data=btn_call_data)]
+        ]
+    )
 
     _caption = (
         caption if isinstance(caption, str) or not callable(caption) else caption()
@@ -208,7 +271,7 @@ async def custom_next_handler(
     try:
         await self.bot.edit_message_media(
             inline_message_id=call.inline_message_id,
-            media=InputMediaPhoto(media=new_url, caption=_caption, parse_mode="HTML"),
+            media=InputMediaPhoto(media=new_url, caption=_caption),
             reply_markup=markup,
         )
     except Exception:
@@ -234,27 +297,6 @@ async def unload(self: Any = None, form_uid: Any = None) -> bool:
     """Internal helper: forget the form without deleting the chat message."""
     try:
         del self._forms[form_uid]
-    except Exception:
-        return False
-    return True
-
-
-async def answer(
-    text: str = None,
-    mod: Any = None,
-    message: AiogramMessage = None,
-    parse_mode: str = "HTML",
-    disable_web_page_preview: bool = True,
-    **kwargs,
-) -> bool:
-    try:
-        await mod.bot.send_message(
-            message.chat.id,
-            text,
-            parse_mode=parse_mode,
-            disable_web_page_preview=disable_web_page_preview,
-            **kwargs,
-        )
     except Exception:
         return False
     return True

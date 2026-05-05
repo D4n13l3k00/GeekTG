@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from friendly_telegram.inline import (
     InlineCall,
     array_sum,
@@ -42,6 +40,23 @@ class TestInlineCall:
         assert call.delete is None
         assert call.unload is None
         assert call.edit is None
+        assert call.form is None
+
+    def test_delegates_to_event(self):
+        event = MagicMock()
+        event.data = "click"
+        event.from_user.id = 42
+        call = InlineCall(event=event)
+        assert call.data == "click"
+        assert call.from_user.id == 42
+
+    def test_helpers_shadow_event(self):
+        # When ``edit`` is set on the wrapper it must take precedence over
+        # any same-named attribute on the underlying event.
+        event = MagicMock()
+        event.edit = "from-event"
+        call = InlineCall(event=event, edit="from-wrapper")
+        assert call.edit == "from-wrapper"
 
 
 class TestGeekInlineQuery:

@@ -1,19 +1,21 @@
 """
-    █ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
-    █▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
+█ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
+█▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
 
-    Copyright 2022 t.me/hikariatama
-    Licensed under the GNU GPLv3
+Copyright 2022 t.me/hikariatama
+Licensed under the GNU GPLv3
 """
 
 # scope: inline_content
 
-from .. import loader, utils
-from telethon.tl.types import Message
-import logging
-from typing import Union, List
-from aiogram.types import CallbackQuery
 import ast
+import logging
+from typing import List, Union
+
+from telethon.tl.types import Message
+
+from .. import loader, utils
+from ..inline.types import InlineCall
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +66,12 @@ class GeekConfigMod(loader.Module):
         self._forms = {}
 
     @staticmethod
-    async def inline__close(call: CallbackQuery) -> None:  # noqa
+    async def inline__close(call: InlineCall) -> None:  # noqa
         await call.delete()
 
     async def inline__set_config(
         self,
-        call: CallbackQuery,
+        call: InlineCall,
         query: str,
         mod: str,
         option: str,
@@ -113,7 +115,7 @@ class GeekConfigMod(loader.Module):
         )
 
     async def inline__configure_option(
-        self, call: CallbackQuery, mod: str, config_opt: str
+        self, call: InlineCall, mod: str, config_opt: str
     ) -> None:  # noqa
         for module in self.allmodules.modules:
             if module.strings("name") == mod:
@@ -129,7 +131,7 @@ class GeekConfigMod(loader.Module):
                         [
                             {
                                 "text": "✍️ Enter value",
-                                "input": "✍️ Enter new configuration value for this option", # noqa: E501
+                                "input": "✍️ Enter new configuration value for this option",  # noqa: E501
                                 "handler": self.inline__set_config,
                                 "args": (mod, config_opt, call.inline_message_id),
                             }
@@ -145,7 +147,7 @@ class GeekConfigMod(loader.Module):
                     ],
                 )
 
-    async def inline__configure(self, call: CallbackQuery, mod: str) -> None:  # noqa
+    async def inline__configure(self, call: InlineCall, mod: str) -> None:  # noqa
         btns = []
         for module in self.allmodules.modules:
             if module.strings("name") == mod:
@@ -170,7 +172,7 @@ class GeekConfigMod(loader.Module):
         )
 
     async def inline__global_config(
-        self, call: Union[Message, CallbackQuery]
+        self, call: Union[Message, InlineCall]
     ) -> None:  # noqa
         to_config = [
             mod.strings("name")

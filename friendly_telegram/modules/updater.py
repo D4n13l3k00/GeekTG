@@ -63,8 +63,9 @@ class UpdaterMod(loader.Module):
         await self.restart_common(msg)
 
     async def prerestart_common(self, message: Message) -> None:
-        logger.debug("Restart requested. exec=%s base=%s",
-                     sys.executable, utils.get_base_dir())
+        logger.debug(
+            "Restart requested. exec=%s base=%s", sys.executable, utils.get_base_dir()
+        )
         check = str(uuid.uuid4())
         await self._db.set(__name__, "selfupdatecheck", check)
         await asyncio.sleep(3)

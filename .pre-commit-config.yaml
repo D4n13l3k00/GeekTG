@@ -1,0 +1,35 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        # Run via uv so the dev dependency group is available regardless of
+        # whether the contributor activated .venv. ``--quiet`` keeps the hook
+        # output tight; failures still print full tracebacks.
+        entry: uv run --extra dev pytest --quiet
+        language: system
+        pass_filenames: false
+        # Always run, not only when tests change — a code edit can break a
+        # test in tests/ that isn't part of the staged change.
+        always_run: true
+        # Skip during interactive rebases / `git commit --amend` workflows
+        # where speed matters; run with ``pre-commit run --hook-stage manual
+        # pytest`` or via CI when needed.
+        stages: [pre-commit]

@@ -1,9 +1,9 @@
 """
-    █ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
-    █▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
+█ █ ▀ █▄▀ ▄▀█ █▀█ ▀    ▄▀█ ▀█▀ ▄▀█ █▀▄▀█ ▄▀█
+█▀█ █ █ █ █▀█ █▀▄ █ ▄  █▀█  █  █▀█ █ ▀ █ █▀█
 
-    Copyright 2022 t.me/hikariatama
-    Licensed under the GNU GPLv3
+Copyright 2022 t.me/hikariatama
+Licensed under the GNU GPLv3
 """
 
 # meta pic: https://img.icons8.com/pastel-glyph/344/sun-glasses--v2.png
@@ -11,10 +11,12 @@
 # scope: geektg_only
 # meta developer: @hikariatama
 
-from .. import loader, utils, main
-from telethon.tl.types import Message
-from aiogram.types import CallbackQuery
 import logging
+
+from telethon.tl.types import Message
+
+from .. import loader, main, utils
+from ..inline.types import InlineCall
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +225,7 @@ class GeekSettingsMod(loader.Module):
 
         self._db.set(main.__name__, "nonickcmds", nn)
 
-    async def inline__setting(self, call: CallbackQuery, key: str, state: bool) -> None:
+    async def inline__setting(self, call: InlineCall, key: str, state: bool) -> None:
         self._db.set(main.__name__, key, state)
 
         if (
@@ -242,11 +244,11 @@ class GeekSettingsMod(loader.Module):
             self.strings("inline_settings"), reply_markup=self._get_settings_markup()
         )
 
-    async def inline__close(self, call: CallbackQuery) -> None:
+    async def inline__close(self, call: InlineCall) -> None:
         await call.delete()
 
     async def inline__update(
-        self, call: CallbackQuery, confirm_required: bool = False
+        self, call: InlineCall, confirm_required: bool = False
     ) -> None:
         if confirm_required:
             await call.edit(
@@ -266,7 +268,7 @@ class GeekSettingsMod(loader.Module):
         await self.allmodules.commands["update"](m)
 
     async def inline__restart(
-        self, call: CallbackQuery, confirm_required: bool = False
+        self, call: InlineCall, confirm_required: bool = False
     ) -> None:
         if confirm_required:
             await call.edit(

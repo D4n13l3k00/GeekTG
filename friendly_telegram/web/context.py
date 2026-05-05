@@ -21,7 +21,7 @@ from typing import Any, Optional
 @dataclass
 class WebContext:
     # ---- bootstrapping kwargs (set once by main.py) ----------------------
-    api_token: Any = None              # namedtuple("api_token", ("ID","HASH"))
+    api_token: Any = None  # namedtuple("api_token", ("ID","HASH"))
     data_root: Optional[str] = None
     connection: Any = None
     proxy: Any = None
@@ -67,4 +67,5 @@ class WebContext:
     def effective_data_dir(self) -> str:
         """``data_root`` if set, otherwise the XDG default."""
         from .. import utils
+
         return self.data_root or utils.get_data_dir()

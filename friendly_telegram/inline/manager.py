@@ -1,20 +1,33 @@
 """InlineManager: bot lifecycle, form/gallery dispatch, callback dispatch.
 
 The freestanding helpers (``InlineCall``, ``GeekInlineQuery``,
-``edit``/``delete``/``unload``/``answer``/``custom_next_handler``,
+``edit``/``delete``/``unload``/``custom_next_handler``,
 ``rand``/``array_sum``/``_load_avatar``) live in ``.types`` — they're
-stateless and bound onto callback objects via ``functools.partial``
-at runtime.
+stateless and bound onto ``InlineCall`` instances via
+``functools.partial`` at runtime.
 """
 
 import asyncio
 import functools
+
+# These were unused in the original module but kept here as part of the
+# verbatim import list since downstream third-party modules occasionally
+# do ``from friendly_telegram.inline import inspect`` etc. Better to be
+# generous than to break someone's loaded_modules/.
+import inspect  # noqa: F401
+import io  # noqa: F401
 import logging
+import random  # noqa: F401
 import re
 import time
+from importlib.resources import files  # noqa: F401
+from types import FunctionType  # noqa: F401
+from typing import Any, List, Union  # noqa: F401
 
-import aiogram
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.types import (
     CallbackQuery,
     ChosenInlineResult,
@@ -23,11 +36,10 @@ from aiogram.types import (
     InlineQuery,
     InlineQueryResultArticle,
     InlineQueryResultPhoto,
-    InputMediaPhoto,
     InputTextMessageContent,
-    Message as AiogramMessage,
+    LinkPreviewOptions,
 )
-from aiogram.utils.exceptions import Unauthorized
+from aiogram.types import Message as AiogramMessage
 from telethon.errors.rpcerrorlist import (
     InputUserDeactivatedError,
     YouBlockedUserError,
@@ -38,11 +50,9 @@ from telethon.utils import get_display_name
 
 from .. import utils
 from .types import (
-    BotMessage,
     GeekInlineQuery,
     InlineCall,
     _load_avatar,
-    answer,
     array_sum,
     custom_next_handler,
     delete,
@@ -51,19 +61,7 @@ from .types import (
     unload,
 )
 
-# These were unused in the original module but kept here as part of the
-# verbatim import list since downstream third-party modules occasionally
-# do ``from friendly_telegram.inline import inspect`` etc. Better to be
-# generous than to break someone's loaded_modules/.
-import inspect  # noqa: F401
-import io       # noqa: F401
-from importlib.resources import files  # noqa: F401
-from types import FunctionType  # noqa: F401
-from typing import Any, List, Union  # noqa: F401
-import random  # noqa: F401
-
 logger = logging.getLogger(__name__)
-
 
 
 class InlineManager:
@@ -433,17 +431,20 @@ class InlineManager:
         self.init_complete = True
 
         # Create bot instance and dispatcher
-        self.bot = Bot(token=self._token)
+        self.bot = Bot(
+            token=self._token,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
         self._bot = self.bot  # This is a temporary alias so the
         # developers can adapt their code
-        self._dp = Dispatcher(self.bot)
+        self._dp = Dispatcher()
 
         # Get bot username to call inline queries
         try:
             self.bot_username = (await self.bot.get_me()).username
             self._bot_username = self.bot_username  # This is a temporary alias so the
             # developers can adapt their code
-        except Unauthorized:
+        except TelegramUnauthorizedError:
             logger.critical("Token expired, revoking...")
             return await self._dp_revoke_token(False)
 
@@ -468,38 +469,88 @@ class InlineManager:
         await self._client.delete_messages(self.bot_username, m)
 
         # Register required event handlers inside aiogram
-        self._dp.register_inline_handler(
-            self._inline_handler, lambda inline_query: True
-        )
-        self._dp.register_callback_query_handler(
-            self._callback_query_handler, lambda query: True
-        )
-        self._dp.register_chosen_inline_handler(
-            self._chosen_inline_handler, lambda chosen_inline_query: True
-        )
-        self._dp.register_message_handler(
-            self._message_handler, lambda *args: True, content_types=["any"]
-        )
+        self._dp.inline_query.register(self._inline_handler)
+        self._dp.callback_query.register(self._callback_query_handler)
+        self._dp.chosen_inline_result.register(self._chosen_inline_handler)
+        self._dp.message.register(self._message_handler)
 
-        old = self.bot.get_updates
-        revoke = self._dp_revoke_token
+        # Trace every incoming update before aiogram routes it to an
+        # observer. WARNING level so it surfaces under the default log
+        # config (root handler is at WARNING by default — INFO would be
+        # invisible while debugging "buttons don't work").
+        @self._dp.update.outer_middleware()
+        async def _trace_update(handler, event, data):
+            present = next(
+                (
+                    k
+                    for k in (
+                        "callback_query",
+                        "inline_query",
+                        "chosen_inline_result",
+                        "message",
+                        "edited_message",
+                        "channel_post",
+                    )
+                    if getattr(event, k, None) is not None
+                ),
+                "<unknown>",
+            )
+            logger.warning("[inline-diag] update %s: %s", event.update_id, present)
+            return await handler(event, data)
 
-        async def new(*args, **kwargs):
-            nonlocal revoke, old
-            try:
-                return await old(*args, **kwargs)
-            except aiogram.utils.exceptions.TerminatedByOtherGetUpdates:
-                await revoke()
-            except aiogram.utils.exceptions.Unauthorized:
+        # ``dp.errors`` in v3 catches *handler* exceptions, not polling-loop
+        # errors. Use it only for the unauth case where we want to stop the
+        # bot cleanly. Conflict / network errors are handled by aiogram's own
+        # retry loop and would just spam logs if we revoked tokens here.
+        @self._dp.errors()
+        async def _on_handler_error(event):
+            if isinstance(event.exception, TelegramUnauthorizedError):
                 logger.critical("Got Unauthorized")
                 await self._stop()
+                return True
+            return False
 
-        self.bot.get_updates = new
+        # aiogram-2 silently dropped any leftover webhook before polling;
+        # v3 doesn't. If the token previously powered a webhook bot, our
+        # getUpdates loop receives nothing — Telegram routes everything to
+        # the configured webhook URL. Strip it. We do NOT pass
+        # ``drop_pending_updates=True`` here: that flag also nukes any
+        # callback_query the user clicked between two restarts, which
+        # looks identical to "buttons don't work" from the outside.
+        try:
+            await self.bot.delete_webhook()
+        except Exception:
+            logger.exception("delete_webhook before polling failed; continuing")
 
-        # Start polling as the separate task, just in case we will need
-        # to force stop this coro. It should be cancelled only by `stop`
-        # because it stops the bot from getting updates
-        self._task = asyncio.ensure_future(self._dp.start_polling())
+        # Telegram's getUpdates remembers the last explicit ``allowed_updates``
+        # set per token. If a previous instance / version subscribed to a
+        # narrower set, the server keeps filtering on that set even when
+        # we're now connecting with a different (wider) handler topology.
+        # Force-resolve from our registered observers and pass it through —
+        # this overwrites the server-side memory on the first call.
+        allowed = self._dp.resolve_used_update_types()
+        logger.warning("[inline-diag] polling start; allowed_updates=%s", allowed)
+
+        # handle_signals=False — userbot's web logout flow installs its own
+        # SIGTERM handler via os.kill(); we don't want aiogram to swallow it.
+        self._task = asyncio.ensure_future(
+            self._dp.start_polling(
+                self.bot,
+                handle_signals=False,
+                allowed_updates=allowed,
+            )
+        )
+
+        # ensure_future swallows exceptions silently. Surface them so a
+        # broken polling loop doesn't look like "buttons just don't work".
+        def _polling_done(task: asyncio.Task) -> None:
+            if task.cancelled():
+                return
+            exc = task.exception()
+            if exc is not None:
+                logger.error("Inline-bot polling task exited with: %r", exc)
+
+        self._task.add_done_callback(_polling_done)
         self._cleaner_task = asyncio.ensure_future(self._cleaner())
 
     async def _message_handler(self, message: AiogramMessage) -> None:
@@ -507,13 +558,15 @@ class InlineManager:
         if message.chat.type != "private":
             return
 
+        # Native ``message.answer(text)`` exists on aiogram 3 Message and
+        # honours the bot-level DefaultBotProperties(parse_mode=HTML), so we
+        # no longer inject our own ``answer`` helper here. Modules built
+        # against the v2 injected helper that pass ``parse_mode``/``disable_
+        # web_page_preview`` keep working since aiogram's signature is a
+        # superset of ours.
         for mod in self._allmodules.modules:
             if not hasattr(mod, "aiogram_watcher"):
                 continue
-
-            setattr(
-                message, "answer", functools.partial(answer, mod=self, message=message)
-            )
 
             try:
                 await mod.aiogram_watcher(message)
@@ -522,15 +575,18 @@ class InlineManager:
 
     async def _stop(self) -> None:
         self._task.cancel()
-        self._dp.stop_polling()
+        await self._dp.stop_polling()
         self._cleaner_task.cancel()
 
-    def _generate_markup(self, form_uid: Union[str, list], buttons: list = False) -> InlineKeyboardMarkup:
+    def _generate_markup(
+        self, form_uid: Union[str, list], buttons: list = False
+    ) -> InlineKeyboardMarkup:
         """Generate markup for form"""
-        markup = InlineKeyboardMarkup()
         if form_uid:
             for row in (
-                self._forms[form_uid]["buttons"] if isinstance(form_uid, str) else form_uid
+                self._forms[form_uid]["buttons"]
+                if isinstance(form_uid, str)
+                else form_uid
             ):
                 for button in row:
                     if "callback" in button and "_callback_data" not in button:
@@ -539,38 +595,46 @@ class InlineManager:
                     if "input" in button and "_switch_query" not in button:
                         button["_switch_query"] = rand(10)
 
-        buttons = buttons or self._forms[form_uid]["buttons"] if isinstance(form_uid, str) else form_uid
+        buttons = (
+            buttons or self._forms[form_uid]["buttons"]
+            if isinstance(form_uid, str)
+            else form_uid
+        )
 
+        rows: List[List[InlineKeyboardButton]] = []
         for row in buttons:
             line = []
             for button in row:
                 try:
                     if "url" in button:
-                        line += [
+                        line.append(
                             InlineKeyboardButton(
-                                button["text"], url=button.get("url", None)
+                                text=button["text"],
+                                url=button.get("url", None),
                             )
-                        ]
+                        )
                     elif "callback" in button:
-                        line += [
+                        line.append(
                             InlineKeyboardButton(
-                                button["text"], callback_data=button["_callback_data"]
+                                text=button["text"],
+                                callback_data=button["_callback_data"],
                             )
-                        ]
+                        )
                     elif "input" in button:
-                        line += [
+                        line.append(
                             InlineKeyboardButton(
-                                button["text"],
+                                text=button["text"],
                                 switch_inline_query_current_chat=button["_switch_query"]
                                 + " ",
                             )
-                        ]
+                        )
                     elif "data" in button:
-                        line += [
+                        line.append(
                             InlineKeyboardButton(
-                                button["text"], callback_data=button["data"]
+                                text=button["text"],
+                                callback_data=button["data"],
                             )
-                        ]
+                        )
                     else:
                         logger.warning(
                             "Button have not been added to "
@@ -585,12 +649,17 @@ class InlineManager:
                     )
                     return False
 
-            markup.row(*line)
+            rows.append(line)
 
-        return markup
+        return InlineKeyboardMarkup(inline_keyboard=rows)
 
     async def _inline_handler(self, inline_query: InlineQuery) -> None:
         """Inline query handler (forms' calls)"""
+        logger.warning(
+            "[inline-diag] inline_query q=%r from=%s",
+            inline_query.query,
+            inline_query.from_user.id,
+        )
         # Retrieve query from passed object
         query = inline_query.query
 
@@ -640,13 +709,12 @@ class InlineManager:
                         title="Show available inline commands",
                         description=f"You have {icmds} available commands",
                         input_message_content=InputTextMessageContent(
-                            itext,
-                            "HTML",
-                            disable_web_page_preview=True,
+                            message_text=itext,
+                            link_preview_options=LinkPreviewOptions(is_disabled=True),
                         ),
-                        thumb_url="https://img.icons8.com/fluency/50/000000/info-squared.png",  # skipcq: FLK-E501
-                        thumb_width=128,
-                        thumb_height=128,
+                        thumbnail_url="https://img.icons8.com/fluency/50/000000/info-squared.png",  # skipcq: FLK-E501
+                        thumbnail_width=128,
+                        thumbnail_height=128,
                     )
                 ],
                 cache_time=0,
@@ -695,10 +763,13 @@ class InlineManager:
                                 title=button["input"],
                                 description="⚠️ Please, do not remove identifier!",
                                 input_message_content=InputTextMessageContent(
-                                    "🔄 <b>Transferring value to userbot...</b>\n"
-                                    "<i>This message is gonna be deleted...</i>",
-                                    "HTML",
-                                    disable_web_page_preview=True,
+                                    message_text=(
+                                        "🔄 <b>Transferring value to userbot...</b>\n"
+                                        "<i>This message is gonna be deleted...</i>"
+                                    ),
+                                    link_preview_options=LinkPreviewOptions(
+                                        is_disabled=True
+                                    ),
                                 ),
                             )
                         ],
@@ -715,11 +786,15 @@ class InlineManager:
                 + gallery["always_allow"]
                 and query == gallery["uid"]
             ):
-                markup = InlineKeyboardMarkup()
-                markup.add(
-                    InlineKeyboardButton(
-                        "Next ➡️", callback_data=gallery["btn_call_data"]
-                    )
+                markup = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="Next ➡️",
+                                callback_data=gallery["btn_call_data"],
+                            )
+                        ]
+                    ]
                 )
 
                 caption = gallery["caption"]
@@ -731,11 +806,10 @@ class InlineManager:
                             id=rand(20),
                             title="Toss a coin",
                             photo_url=gallery["photo_url"],
-                            thumb_url=gallery["photo_url"],
+                            thumbnail_url=gallery["photo_url"],
                             caption=caption,
                             description=caption,
                             reply_markup=markup,
-                            parse_mode="HTML",
                         )
                     ],
                     cache_time=0,
@@ -748,39 +822,46 @@ class InlineManager:
 
         # Otherwise, answer it with templated form
         await inline_query.answer(
-            [
-                InlineQueryResultPhoto(
-                    id=rand(20),
-                    title="GeekTG",
-                    photo_url=self._forms[query]["photo"],
-                    caption=self._forms[query]["text"],
-                    reply_markup=self._generate_markup(query),
-                    thumb_url=self._forms[query]["photo"],
-                    parse_mode="HTML",
-                )
-            ]
-            if self._forms[query]["photo"] else
-            [
-                InlineQueryResultArticle(
-                    id=rand(20),
-                    title="GeekTG",
-                    input_message_content=InputTextMessageContent(
-                        self._forms[query]["text"],
-                        "HTML",
-                        disable_web_page_preview=True,
-                    ),
-                    reply_markup=self._generate_markup(query),
-                )
-            ],
+            (
+                [
+                    InlineQueryResultPhoto(
+                        id=rand(20),
+                        title="GeekTG",
+                        photo_url=self._forms[query]["photo"],
+                        caption=self._forms[query]["text"],
+                        reply_markup=self._generate_markup(query),
+                        thumbnail_url=self._forms[query]["photo"],
+                    )
+                ]
+                if self._forms[query]["photo"]
+                else [
+                    InlineQueryResultArticle(
+                        id=rand(20),
+                        title="GeekTG",
+                        input_message_content=InputTextMessageContent(
+                            message_text=self._forms[query]["text"],
+                            link_preview_options=LinkPreviewOptions(is_disabled=True),
+                        ),
+                        reply_markup=self._generate_markup(query),
+                    )
+                ]
+            ),
             cache_time=60,
         )
 
-    async def _callback_query_handler(
-        self, query: CallbackQuery, reply_markup: List[List[dict]] = None
-    ) -> None:
-        """Callback query handler (buttons' presses)"""
-        if reply_markup is None:
-            reply_markup = []
+    async def _callback_query_handler(self, query: CallbackQuery) -> None:
+        """Callback query handler (buttons' presses).
+
+        v2 had an unused ``reply_markup`` parameter on this signature. aiogram
+        3 inspects handler params and passes any matching name from workflow
+        data — leaving the legacy kwarg in here invited a foreign middleware
+        to inject something and crash dispatch silently. Dropped.
+        """
+        logger.warning(
+            "[inline-diag] callback_query data=%r from=%s",
+            query.data,
+            query.from_user.id,
+        )
 
         # First, dispatch all registered callback handlers
         for mod in self._allmodules.modules:
@@ -816,21 +897,21 @@ class InlineManager:
                         await query.answer("You are not allowed to press this button!")
                         return
 
-                    query.delete = functools.partial(
-                        delete, self=self, form=form, form_uid=form_uid
+                    call = InlineCall(
+                        event=query,
+                        delete=functools.partial(
+                            delete, self=self, form=form, form_uid=form_uid
+                        ),
+                        unload=functools.partial(unload, self=self, form_uid=form_uid),
+                        edit=functools.partial(
+                            edit, self=self, query=query, form=form, form_uid=form_uid
+                        ),
+                        form={"id": form_uid, **form},
                     )
-                    query.unload = functools.partial(
-                        unload, self=self, form_uid=form_uid
-                    )
-                    query.edit = functools.partial(
-                        edit, self=self, query=query, form=form, form_uid=form_uid
-                    )
-
-                    query.form = {"id": form_uid, **form}
 
                     try:
                         return await button["callback"](
-                            query,
+                            call,
                             *button.get("args", []),
                             **button.get("kwargs", {}),
                         )
@@ -880,20 +961,19 @@ class InlineManager:
 
                     query = query.split(maxsplit=1)[1] if len(query.split()) > 1 else ""
 
-                    call = InlineCall()
-
-                    call.delete = functools.partial(
-                        delete, self=self, form=form, form_uid=form_uid
-                    )
-                    call.unload = functools.partial(
-                        unload, self=self, form_uid=form_uid
-                    )
-                    call.edit = functools.partial(
-                        edit,
-                        self=self,
-                        query=chosen_inline_query,
-                        form=form,
-                        form_uid=form_uid,
+                    call = InlineCall(
+                        event=chosen_inline_query,
+                        delete=functools.partial(
+                            delete, self=self, form=form, form_uid=form_uid
+                        ),
+                        unload=functools.partial(unload, self=self, form_uid=form_uid),
+                        edit=functools.partial(
+                            edit,
+                            self=self,
+                            query=chosen_inline_query,
+                            form=form,
+                            form_uid=form_uid,
+                        ),
                     )
 
                     try:
@@ -1030,9 +1110,9 @@ class InlineManager:
             q = await self._client.inline_query(self.bot_username, form_uid)
             m = await q[0].click(
                 utils.get_chat_id(message) if isinstance(message, Message) else message,
-                reply_to=message.reply_to_msg_id
-                if isinstance(message, Message)
-                else None,
+                reply_to=(
+                    message.reply_to_msg_id if isinstance(message, Message) else None
+                ),
             )
         except Exception:
             msg = (
@@ -1165,9 +1245,9 @@ class InlineManager:
             q = await self._client.inline_query(self.bot_username, gallery_uid)
             m = await q[0].click(
                 utils.get_chat_id(message) if isinstance(message, Message) else message,
-                reply_to=message.reply_to_msg_id
-                if isinstance(message, Message)
-                else None,
+                reply_to=(
+                    message.reply_to_msg_id if isinstance(message, Message) else None
+                ),
             )
         except Exception:
             msg = (

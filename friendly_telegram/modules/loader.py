@@ -27,12 +27,12 @@ import urllib
 import uuid
 from importlib.abc import SourceLoader
 from importlib.machinery import ModuleSpec
+
+import requests
 import telethon
 from telethon.tl.types import Message
 
-import requests
-
-from .. import loader, utils, main
+from .. import loader, main, utils
 
 logger = logging.getLogger(__name__)
 
@@ -394,7 +394,9 @@ class LoaderMod(loader.Module):
                 )  # Try again
             except loader.LoadError as e:
                 if message:
-                    await utils.answer(message, f"🚫 <b>{utils.escape_html(str(e))}</b>")
+                    await utils.answer(
+                        message, f"🚫 <b>{utils.escape_html(str(e))}</b>"
+                    )
                 return
         except BaseException as e:
             logger.exception(f"Loading external module failed due to {e}")
@@ -422,7 +424,9 @@ class LoaderMod(loader.Module):
                 )
             except loader.LoadError as e:
                 if message:
-                    await utils.answer(message, f"🚫 <b>{utils.escape_html(str(e))}</b>")
+                    await utils.answer(
+                        message, f"🚫 <b>{utils.escape_html(str(e))}</b>"
+                    )
                 return
         except Exception as e:
             logger.exception(f"Module threw because {e}")
@@ -444,9 +448,7 @@ class LoaderMod(loader.Module):
             )
 
             if instance.__doc__:
-                modhelp += (
-                    f"<i>\nℹ️ {utils.escape_html(inspect.getdoc(instance))}</i>\n"
-                )
+                modhelp += f"<i>\nℹ️ {utils.escape_html(inspect.getdoc(instance))}</i>\n"
 
             if re.search(r"# ?scope: ?disable_onload_docs", doc):
                 return await utils.answer(

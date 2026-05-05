@@ -226,8 +226,9 @@ This is a maintenance / modernization fork. Goals, in order:
 1. ✅ Make it install and boot on Python 3.11 / 3.12 (done).
 2. ✅ Drop external dependencies that no longer exist (Heroku, Okteto, Telethon-Mod).
 3. ✅ Local-only data store, friendlier first-run experience.
-4. 🟡 Better module developer UX — type hints, ruff/black, smaller monoliths
-   (`inline.py`, `dispatcher.py`).
+4. 🟡 Better module developer UX — type hints, ruff/black/isort wired via
+   pre-commit, smaller monoliths (`inline.py` split into `inline/`,
+   `dispatcher.py` next).
 5. 🟡 Real self-update path that works for wheel installs (currently a stub
    pointing at `uv tool upgrade`).
 6. 🟡 Documentation refresh — the upstream `docs.geektg.tk` is offline; new
