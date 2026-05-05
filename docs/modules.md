@@ -575,7 +575,7 @@ The loader scans the **first comments** of a module file for directives:
 # requires: pillow numpy ffmpeg-python
 
 # scope: ffmpeg
-# scope: geektg_min 3.1.25
+# scope: geektg_min 4.0.0
 ```
 
 | Directive | Effect |
