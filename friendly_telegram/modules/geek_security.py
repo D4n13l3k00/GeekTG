@@ -12,11 +12,11 @@ import logging
 from types import FunctionType
 from typing import List, Union
 
-import aiogram
 from telethon.tl.types import Message, PeerUser, User
 from telethon.utils import get_display_name
 
 from .. import loader, main, security, utils
+from ..inline.types import InlineCall
 from ..security import (
     DEFAULT_PERMISSIONS,
     GROUP_ADMIN,
@@ -108,7 +108,7 @@ class GeekSecurityMod(loader.Module):
         self._is_geek = hasattr(self, "inline")
 
     async def inline__switch_perm(
-        self, call: aiogram.types.CallbackQuery, command: str, group: str, level: bool
+        self, call: InlineCall, command: str, group: str, level: bool
     ) -> None:
         cmd = self.allmodules.commands[command]
         mask = self._db.get(security.__name__, "masks", {}).get(
@@ -134,7 +134,7 @@ class GeekSecurityMod(loader.Module):
         )
 
     async def inline__switch_perm_bm(
-        self, call: aiogram.types.CallbackQuery, group: str, level: bool
+        self, call: InlineCall, group: str, level: bool
     ) -> None:
         mask = self._db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
         bit = security.BITMAP[group.upper()]
@@ -152,7 +152,7 @@ class GeekSecurityMod(loader.Module):
         )
 
     @staticmethod
-    async def inline_close(call: aiogram.types.CallbackQuery) -> None:
+    async def inline_close(call: InlineCall) -> None:
         await call.delete()
 
     def _build_markup(self, command: FunctionType) -> List[List[dict]]:
@@ -277,7 +277,7 @@ class GeekSecurityMod(loader.Module):
 
     async def _add_to_group(
         self,
-        message: Union[Message, "aiogram.types.CallbackQuery"],  # noqa: F821
+        message: Union[Message, InlineCall],  # noqa: F821
         group: str,
         confirmed: bool = False,
         user: int = None,

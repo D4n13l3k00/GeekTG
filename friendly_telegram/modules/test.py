@@ -13,11 +13,11 @@ import time
 from io import BytesIO
 from typing import Union
 
-import aiogram
 from telethon.errors.rpcerrorlist import ChatSendInlineForbiddenError
 from telethon.tl.types import Message
 
 from .. import loader, utils
+from ..inline.types import InlineCall
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +63,12 @@ class TestMod(loader.Module):
         )
 
     @staticmethod
-    async def cancel(call: aiogram.types.CallbackQuery) -> None:
+    async def cancel(call: InlineCall) -> None:
         await call.delete()
 
     async def logscmd(
         self,
-        message: Union[Message, aiogram.types.CallbackQuery],
+        message: Union[Message, InlineCall],
         force: bool = False,
         lvl: Union[int, None] = None,
     ) -> None:

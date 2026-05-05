@@ -12,11 +12,11 @@ from traceback import format_exc
 from types import ModuleType
 
 import telethon
-from aiogram.types import CallbackQuery
 from meval import meval
 from telethon.tl.types import Message
 
 from .. import loader, main, utils
+from ..inline.types import InlineCall
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +69,11 @@ class PythonMod(loader.Module):
         """Alias for .e command"""
         await self.ecmd(message)
 
-    async def inline__close(self, call: CallbackQuery) -> None:
+    async def inline__close(self, call: InlineCall) -> None:
         await call.answer("Operation cancelled")
         await call.delete()
 
-    async def inline__allow(self, call: CallbackQuery) -> None:
+    async def inline__allow(self, call: InlineCall) -> None:
         await call.answer("Now you can access db through .e command", show_alert=True)
         self._db.set(main.__name__, "enable_db_eval", True)
         await call.delete()
