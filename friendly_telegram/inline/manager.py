@@ -474,6 +474,30 @@ class InlineManager:
         self._dp.chosen_inline_result.register(self._chosen_inline_handler)
         self._dp.message.register(self._message_handler)
 
+        # Trace every incoming update before aiogram routes it to an
+        # observer. WARNING level so it surfaces under the default log
+        # config (root handler is at WARNING by default — INFO would be
+        # invisible while debugging "buttons don't work").
+        @self._dp.update.outer_middleware()
+        async def _trace_update(handler, event, data):
+            present = next(
+                (
+                    k
+                    for k in (
+                        "callback_query",
+                        "inline_query",
+                        "chosen_inline_result",
+                        "message",
+                        "edited_message",
+                        "channel_post",
+                    )
+                    if getattr(event, k, None) is not None
+                ),
+                "<unknown>",
+            )
+            logger.warning("[inline-diag] update %s: %s", event.update_id, present)
+            return await handler(event, data)
+
         # ``dp.errors`` in v3 catches *handler* exceptions, not polling-loop
         # errors. Use it only for the unauth case where we want to stop the
         # bot cleanly. Conflict / network errors are handled by aiogram's own
@@ -487,19 +511,34 @@ class InlineManager:
             return False
 
         # aiogram-2 silently dropped any leftover webhook before polling;
-        # v3 doesn't. If the token previously powered a webhook bot — or
-        # another GeekTG instance crashed mid-poll — getUpdates stays
-        # locked and our handlers never fire. Drop the webhook and any
-        # pending updates before we start.
+        # v3 doesn't. If the token previously powered a webhook bot, our
+        # getUpdates loop receives nothing — Telegram routes everything to
+        # the configured webhook URL. Strip it. We do NOT pass
+        # ``drop_pending_updates=True`` here: that flag also nukes any
+        # callback_query the user clicked between two restarts, which
+        # looks identical to "buttons don't work" from the outside.
         try:
-            await self.bot.delete_webhook(drop_pending_updates=True)
+            await self.bot.delete_webhook()
         except Exception:
             logger.exception("delete_webhook before polling failed; continuing")
+
+        # Telegram's getUpdates remembers the last explicit ``allowed_updates``
+        # set per token. If a previous instance / version subscribed to a
+        # narrower set, the server keeps filtering on that set even when
+        # we're now connecting with a different (wider) handler topology.
+        # Force-resolve from our registered observers and pass it through —
+        # this overwrites the server-side memory on the first call.
+        allowed = self._dp.resolve_used_update_types()
+        logger.warning("[inline-diag] polling start; allowed_updates=%s", allowed)
 
         # handle_signals=False — userbot's web logout flow installs its own
         # SIGTERM handler via os.kill(); we don't want aiogram to swallow it.
         self._task = asyncio.ensure_future(
-            self._dp.start_polling(self.bot, handle_signals=False)
+            self._dp.start_polling(
+                self.bot,
+                handle_signals=False,
+                allowed_updates=allowed,
+            )
         )
 
         # ensure_future swallows exceptions silently. Surface them so a
@@ -616,8 +655,10 @@ class InlineManager:
 
     async def _inline_handler(self, inline_query: InlineQuery) -> None:
         """Inline query handler (forms' calls)"""
-        logger.info(
-            "inline_query: q=%r from=%s", inline_query.query, inline_query.from_user.id
+        logger.warning(
+            "[inline-diag] inline_query q=%r from=%s",
+            inline_query.query,
+            inline_query.from_user.id,
         )
         # Retrieve query from passed object
         query = inline_query.query
@@ -816,7 +857,11 @@ class InlineManager:
         data — leaving the legacy kwarg in here invited a foreign middleware
         to inject something and crash dispatch silently. Dropped.
         """
-        logger.info("callback_query: data=%r from=%s", query.data, query.from_user.id)
+        logger.warning(
+            "[inline-diag] callback_query data=%r from=%s",
+            query.data,
+            query.from_user.id,
+        )
 
         # First, dispatch all registered callback handlers
         for mod in self._allmodules.modules:
