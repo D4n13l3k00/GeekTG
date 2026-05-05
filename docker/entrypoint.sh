@@ -37,7 +37,7 @@ runuser -u ftg -- env \
     "VIRTUAL_ENV=$RUNTIME_VENV" \
     "UV_PROJECT_ENVIRONMENT=$RUNTIME_VENV" \
     "PATH=$RUNTIME_VENV/bin:$PATH" \
-    uv sync --frozen --no-dev --project /home/ftg
+    uv sync --frozen --no-dev --extra media --project /home/ftg
 
 # 3. Hand off to the real command as ftg (defaults to ``gtg --port 8888``
 #    from the Dockerfile CMD).

@@ -48,9 +48,7 @@ USER root
 RUN install -d -o ftg -g ftg /opt/gtg-venv
 USER ftg
 
-RUN UV_PROJECT_ENVIRONMENT=/opt/gtg-venv uv sync --frozen --no-dev \
- && uv pip install --python /opt/gtg-venv/bin/python \
-        Pillow pydub ffmpeg-python wand moviepy numpy
+RUN UV_PROJECT_ENVIRONMENT=/opt/gtg-venv uv sync --frozen --no-dev --extra media
 
 # Pre-create the data tree owned by ``ftg`` so a named volume mounted on top
 # inherits its ownership on first use. Without this, Docker creates the

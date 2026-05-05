@@ -32,6 +32,21 @@ dependencies = [
     "psutil>=5.9",
 ]
 
+# Heavy media-processing libraries that many third-party modules pull in
+# via `# requires:`. Bundling them in a named extra means:
+#   1. pipx/uv-tool users don't pay for them unless they opt in.
+#   2. The Docker image *does* opt in, and they end up in uv.lock — so the
+#      entrypoint's `uv sync --frozen` no longer wipes them on every boot.
+[project.optional-dependencies]
+media = [
+    "Pillow",
+    "pydub",
+    "ffmpeg-python",
+    "wand",
+    "moviepy",
+    "numpy",
+]
+
 [project.scripts]
 gtg = "friendly_telegram.__main__:_cli"
 friendly-telegram = "friendly_telegram.__main__:_cli"
