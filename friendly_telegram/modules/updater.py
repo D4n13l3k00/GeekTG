@@ -67,12 +67,12 @@ class UpdaterMod(loader.Module):
             "Restart requested. exec=%s base=%s", sys.executable, utils.get_base_dir()
         )
         check = str(uuid.uuid4())
-        await self._db.set(__name__, "selfupdatecheck", check)
+        await self.ctx.db.set(__name__, "selfupdatecheck", check)
         await asyncio.sleep(3)
-        if self._db.get(__name__, "selfupdatecheck", "") != check:
+        if self.ctx.db.get(__name__, "selfupdatecheck", "") != check:
             raise ValueError("A restart is already in progress!")
-        self._db.set(__name__, "selfupdatechat", utils.get_chat_id(message))
-        await self._db.set(__name__, "selfupdatemsg", message.id)
+        self.ctx.db.set(__name__, "selfupdatechat", utils.get_chat_id(message))
+        await self.ctx.db.set(__name__, "selfupdatemsg", message.id)
 
     async def restart_common(self, message: Message) -> None:
         await self.prerestart_common(message)
@@ -103,9 +103,7 @@ class UpdaterMod(loader.Module):
         )
 
     async def client_ready(self, client, db):
-        self._db = db
         self._me = await client.get_me()
-        self._client = client
 
         if (
             db.get(__name__, "selfupdatechat") is not None
@@ -116,14 +114,14 @@ class UpdaterMod(loader.Module):
             except Exception:
                 logger.exception("Failed to deliver post-restart confirmation")
 
-        self._db.set(__name__, "selfupdatechat", None)
-        self._db.set(__name__, "selfupdatemsg", None)
+        self.ctx.db.set(__name__, "selfupdatechat", None)
+        self.ctx.db.set(__name__, "selfupdatemsg", None)
 
     async def update_complete(self, client):
         logger.debug("Restart successful, editing the original message")
         await client.edit_message(
-            self._db.get(__name__, "selfupdatechat"),
-            self._db.get(__name__, "selfupdatemsg"),
+            self.ctx.db.get(__name__, "selfupdatechat"),
+            self.ctx.db.get(__name__, "selfupdatemsg"),
             self.strings("success"),
         )
 

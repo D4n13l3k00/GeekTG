@@ -47,11 +47,7 @@ class GeekSettingsMod(loader.Module):
             str(_.__self__.__class__.strings["name"])
             for _ in self.allmodules.watchers
             if _.__self__.__class__.strings is not None
-        ], self._db.get(main.__name__, "disabled_watchers", {})
-
-    async def client_ready(self, client, db) -> None:
-        self._db = db
-        self._client = client
+        ], self.ctx.db.get(main.__name__, "disabled_watchers", {})
 
     async def watcherscmd(self, message: Message) -> None:
         """List current watchers"""
@@ -109,7 +105,7 @@ class GeekSettingsMod(loader.Module):
                 self.strings("enabled").format(args) + " <b>in current chat</b>",
             )
 
-        self._db.set(main.__name__, "disabled_watchers", disabled_watchers)
+        self.ctx.db.set(main.__name__, "disabled_watchers", disabled_watchers)
 
     async def watchercmd(self, message: Message) -> None:
         """<module> - Toggle global watcher rules
@@ -159,7 +155,7 @@ class GeekSettingsMod(loader.Module):
                 *(["out"] if out else []),
                 *(["in"] if incoming else []),
             ]
-            self._db.set(main.__name__, "disabled_watchers", disabled_watchers)
+            self.ctx.db.set(main.__name__, "disabled_watchers", disabled_watchers)
             await utils.answer(
                 message,
                 self.strings("enabled").format(args)
@@ -170,11 +166,11 @@ class GeekSettingsMod(loader.Module):
         if args in disabled_watchers and "*" in disabled_watchers[args]:
             await utils.answer(message, self.strings("enabled").format(args))
             del disabled_watchers[args]
-            self._db.set(main.__name__, "disabled_watchers", disabled_watchers)
+            self.ctx.db.set(main.__name__, "disabled_watchers", disabled_watchers)
             return
 
         disabled_watchers[args] = ["*"]
-        self._db.set(main.__name__, "disabled_watchers", disabled_watchers)
+        self.ctx.db.set(main.__name__, "disabled_watchers", disabled_watchers)
         await utils.answer(message, self.strings("disabled").format(args))
 
     async def nonickusercmd(self, message: Message) -> None:
@@ -184,7 +180,7 @@ class GeekSettingsMod(loader.Module):
         if not isinstance(u, int):
             u = u.user_id
 
-        nn = self._db.get(main.__name__, "nonickusers", [])
+        nn = self.ctx.db.get(main.__name__, "nonickusers", [])
         if u not in nn:
             nn += [u]
             nn = list(set(nn))  # skipcq: PTC-W0018
@@ -193,7 +189,7 @@ class GeekSettingsMod(loader.Module):
             nn = list(set(nn) - {u})
             await utils.answer(message, self.strings("user_nn").format("off"))
 
-        self._db.set(main.__name__, "nonickusers", nn)
+        self.ctx.db.set(main.__name__, "nonickusers", nn)
 
     async def nonickcmdcmd(self, message: Message) -> None:
         args = utils.get_args_raw(message)
@@ -203,14 +199,14 @@ class GeekSettingsMod(loader.Module):
         if args not in self.allmodules.commands:
             return await utils.answer(message, self.strings("cmd404"))
 
-        nn = self._db.get(main.__name__, "nonickcmds", [])
+        nn = self.ctx.db.get(main.__name__, "nonickcmds", [])
         if args not in nn:
             nn += [args]
             nn = list(set(nn))
             await utils.answer(
                 message,
                 self.strings("cmd_nn").format(
-                    self._db.get(main.__name__, "command_prefix", ".") + args, "on"
+                    self.ctx.db.get(main.__name__, "command_prefix", ".") + args, "on"
                 ),
             )
         else:
@@ -218,20 +214,20 @@ class GeekSettingsMod(loader.Module):
             await utils.answer(
                 message,
                 self.strings("cmd_nn").format(
-                    self._db.get(main.__name__, "command_prefix", ".") + args,
+                    self.ctx.db.get(main.__name__, "command_prefix", ".") + args,
                     "off",
                 ),
             )
 
-        self._db.set(main.__name__, "nonickcmds", nn)
+        self.ctx.db.set(main.__name__, "nonickcmds", nn)
 
     async def inline__setting(self, call: InlineCall, key: str, state: bool) -> None:
-        self._db.set(main.__name__, key, state)
+        self.ctx.db.set(main.__name__, key, state)
 
         if (
             key == "no_nickname"
             and state
-            and self._db.get(main.__name__, "command_prefix", ".") == "."
+            and self.ctx.db.get(main.__name__, "command_prefix", ".") == "."
         ):
             await call.answer(
                 "Warning! You enabled NoNick with default prefix! You may get muted in GeekTG chats. Change prefix or disable NoNick!",
@@ -264,7 +260,7 @@ class GeekSettingsMod(loader.Module):
 
         await call.answer("You userbot is being updated...", show_alert=True)
         await call.delete()
-        m = await self._client.send_message("me", ".update")
+        m = await self.ctx.client.send_message("me", ".update")
         await self.allmodules.commands["update"](m)
 
     async def inline__restart(
@@ -284,7 +280,7 @@ class GeekSettingsMod(loader.Module):
 
         await call.answer("You userbot is being restarted...", show_alert=True)
         await call.delete()
-        m = await self._client.send_message("me", ".restart")
+        m = await self.ctx.client.send_message("me", ".restart")
         await self.allmodules.commands["restart"](m)
 
     def _get_settings_markup(self) -> list:
@@ -299,7 +295,7 @@ class GeekSettingsMod(loader.Module):
                             False,
                         ),
                     }
-                    if self._db.get(main.__name__, "no_nickname", True)
+                    if self.ctx.db.get(main.__name__, "no_nickname", True)
                     else {
                         "text": "🚫 NoNick",
                         "callback": self.inline__setting,
@@ -318,7 +314,7 @@ class GeekSettingsMod(loader.Module):
                             False,
                         ),
                     }
-                    if self._db.get(main.__name__, "grep", True)
+                    if self.ctx.db.get(main.__name__, "grep", True)
                     else {
                         "text": "🚫 Grep",
                         "callback": self.inline__setting,
@@ -337,7 +333,7 @@ class GeekSettingsMod(loader.Module):
                             False,
                         ),
                     }
-                    if self._db.get(main.__name__, "inlinelogs", True)
+                    if self.ctx.db.get(main.__name__, "inlinelogs", True)
                     else {
                         "text": "🚫 InlineLogs",
                         "callback": self.inline__setting,

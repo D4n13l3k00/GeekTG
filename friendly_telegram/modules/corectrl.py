@@ -78,10 +78,6 @@ class CoreMod(loader.Module):
         ),
     }
 
-    async def client_ready(self, client, db):
-        self._db = db
-        self._client = client
-
     async def blacklistcommon(self, message: Message) -> None:
         args = utils.get_args(message)
 
@@ -127,10 +123,10 @@ class CoreMod(loader.Module):
         Blacklist the bot from operating somewhere"""
         chatid = await self.blacklistcommon(message)
 
-        self._db.set(
+        self.ctx.db.set(
             main.__name__,
             "blacklist_chats",
-            self._db.get(main.__name__, "blacklist_chats", []) + [chatid],
+            self.ctx.db.get(main.__name__, "blacklist_chats", []) + [chatid],
         )
 
         await utils.answer(message, self.strings("blacklisted", message).format(chatid))
@@ -140,10 +136,10 @@ class CoreMod(loader.Module):
         Unblacklist the bot from operating somewhere"""
         chatid = await self.blacklistcommon(message)
 
-        self._db.set(
+        self.ctx.db.set(
             main.__name__,
             "blacklist_chats",
-            list(set(self._db.get(main.__name__, "blacklist_chats", [])) - {chatid}),
+            list(set(self.ctx.db.get(main.__name__, "blacklist_chats", [])) - {chatid}),
         )
 
         await utils.answer(
@@ -170,10 +166,10 @@ class CoreMod(loader.Module):
         Prevent this user from running any commands"""
         user = await self.getuser(message)
 
-        self._db.set(
+        self.ctx.db.set(
             main.__name__,
             "blacklist_users",
-            self._db.get(main.__name__, "blacklist_users", []) + [user],
+            self.ctx.db.get(main.__name__, "blacklist_users", []) + [user],
         )
 
         await utils.answer(
@@ -185,10 +181,10 @@ class CoreMod(loader.Module):
         Allow this user to run permitted commands"""
         user = await self.getuser(message)
 
-        self._db.set(
+        self.ctx.db.set(
             main.__name__,
             "blacklist_users",
-            list(set(self._db.get(main.__name__, "blacklist_users", [])) - {user}),
+            list(set(self.ctx.db.get(main.__name__, "blacklist_users", [])) - {user}),
         )
 
         await utils.answer(
@@ -208,8 +204,8 @@ class CoreMod(loader.Module):
             await utils.answer(message, self.strings("prefix_incorrect", message))
             return
 
-        oldprefix = self._db.get(main.__name__, "command_prefix", ".")
-        self._db.set(main.__name__, "command_prefix", args)
+        oldprefix = self.ctx.db.get(main.__name__, "command_prefix", ".")
+        self.ctx.db.set(main.__name__, "command_prefix", args)
         await utils.answer(
             message,
             self.strings("prefix_set", message).format(
@@ -241,8 +237,10 @@ class CoreMod(loader.Module):
         ret = self.allmodules.add_alias(alias, cmd)
 
         if ret:
-            self._db.set(
-                __name__, "aliases", {**self._db.get(__name__, "aliases"), alias: cmd}
+            self.ctx.db.set(
+                __name__,
+                "aliases",
+                {**self.ctx.db.get(__name__, "aliases"), alias: cmd},
             )
             await utils.answer(
                 message,
@@ -267,9 +265,9 @@ class CoreMod(loader.Module):
         ret = self.allmodules.remove_alias(alias)
 
         if ret:
-            current = self._db.get(__name__, "aliases")
+            current = self.ctx.db.get(__name__, "aliases")
             del current[alias]
-            self._db.set(__name__, "aliases", current)
+            self.ctx.db.set(__name__, "aliases", current)
             await utils.answer(
                 message,
                 self.strings("alias_removed", message).format(utils.escape_html(alias)),
@@ -295,23 +293,23 @@ class CoreMod(loader.Module):
             pack = int(pack)
 
         try:
-            pack = await self._client.get_entity(pack)
+            pack = await self.ctx.client.get_entity(pack)
         except ValueError:
             await utils.answer(message, self.strings("bad_pack", message))
             return
 
         if isinstance(pack, telethon.tl.types.Channel) and not pack.megagroup:
-            self._db.setdefault(main.__name__, {}).setdefault("langpacks", []).append(
-                pack.id
-            )
-            self._db.save()
+            self.ctx.db.setdefault(main.__name__, {}).setdefault(
+                "langpacks", []
+            ).append(pack.id)
+            self.ctx.db.save()
             await utils.answer(message, self.strings("trnsl_saved", message))
         else:
             await utils.answer(message, self.strings("bad_pack", message))
 
     async def cleartrnslcmd(self, message: Message) -> None:
         """Remove all translation packs"""
-        self._db.set(main.__name__, "langpacks", [])
+        self.ctx.db.set(main.__name__, "langpacks", [])
         await utils.answer(message, self.strings("packs_cleared", message))
 
     async def setlangcmd(self, message: Message) -> None:
@@ -321,14 +319,14 @@ class CoreMod(loader.Module):
         With no parameters, all translations are disabled
         Restart required after use"""
         langs = utils.get_args(message)
-        self._db.set(main.__name__, "language", langs)
+        self.ctx.db.set(main.__name__, "language", langs)
         await utils.answer(message, self.strings("lang_set", message))
 
     @loader.owner
     async def cleardbcmd(self, message: Message) -> None:
         """Clears the entire database, effectively performing a factory reset"""
-        self._db.clear()
-        self._db.save()
+        self.ctx.db.clear()
+        self.ctx.db.save()
         await utils.answer(message, self.strings("db_cleared", message))
 
     async def _client_ready2(self, client, db):  # skicpq: PYL-W0613

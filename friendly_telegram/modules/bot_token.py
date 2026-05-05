@@ -67,7 +67,7 @@ class BotTokenMod(loader.Module):
     @loader.owner
     async def bottokencmd(self, message: Message) -> None:
         """Show the currently configured inline bot."""
-        token = self._db.get(_DB_NS, _DB_KEY, None)
+        token = self.ctx.db.get(_DB_NS, _DB_KEY, None)
         if not token:
             await utils.answer(message, self.strings("no_token", message))
             return
@@ -99,7 +99,7 @@ class BotTokenMod(loader.Module):
             )
             return
 
-        self._db.set(_DB_NS, _DB_KEY, token)
+        self.ctx.db.set(_DB_NS, _DB_KEY, token)
         # Hot-swap into running InlineManager so reload isn't strictly required;
         # ``.restart`` is still recommended to re-bind handlers cleanly.
         inline = getattr(self, "inline", None)
@@ -116,7 +116,7 @@ class BotTokenMod(loader.Module):
     @loader.owner
     async def resetbottokencmd(self, message: Message) -> None:
         """Forget the saved bot token (will create a new bot on next restart)."""
-        self._db.set(_DB_NS, _DB_KEY, None)
+        self.ctx.db.set(_DB_NS, _DB_KEY, None)
         inline = getattr(self, "inline", None)
         if inline is not None:
             inline._token = False
@@ -143,7 +143,3 @@ class BotTokenMod(loader.Module):
                 await bot.session.close()
             except Exception:
                 pass
-
-    async def client_ready(self, client, db):
-        self._db = db
-        self._client = client

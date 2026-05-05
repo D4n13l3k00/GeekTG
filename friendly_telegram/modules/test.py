@@ -210,7 +210,7 @@ class TestMod(loader.Module):
             )
         else:
             await message.delete()
-            await self._client.send_file(
+            await self.ctx.client.send_file(
                 message.form["chat"],
                 logs,
                 caption=self.strings("logs_caption").format(named_lvl),
@@ -219,7 +219,7 @@ class TestMod(loader.Module):
     async def _apply_loglevel(self, lvl: int) -> None:
         for handler in logging.getLogger().handlers:
             handler.setLevel(lvl)
-        self._db.set("friendly_telegram.main", "loglevel", lvl)
+        self.ctx.db.set("friendly_telegram.main", "loglevel", lvl)
 
     @loader.owner
     async def setloglevelcmd(
@@ -322,7 +322,3 @@ class TestMod(loader.Module):
         ms = (end - start) * 0.000001
 
         await utils.answer(message, self.strings("results_ping").format(round(ms, 3)))
-
-    async def client_ready(self, client, db) -> None:
-        self._client = client
-        self._db = db

@@ -40,14 +40,12 @@ class GeekInfoMod(loader.Module):
     }
 
     def get(self, *args) -> dict:
-        return self._db.get(self.strings["name"], *args)
+        return self.ctx.db.get(self.strings["name"], *args)
 
     def set(self, *args) -> None:
-        return self._db.set(self.strings["name"], *args)
+        return self.ctx.db.set(self.strings["name"], *args)
 
     async def client_ready(self, client, db) -> None:
-        self._db = db
-        self._client = client
         self._me = await client.get_me()
 
     def __init__(self):

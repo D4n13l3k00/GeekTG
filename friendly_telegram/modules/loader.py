@@ -187,11 +187,13 @@ class LoaderMod(loader.Module):
             args = args[0] if urllib.parse.urlparse(args[0]).netloc else args[0].lower()
 
             if await self.download_and_install(args, message):
-                self._db.set(
+                self.ctx.db.set(
                     __name__,
                     "loaded_modules",
                     list(
-                        set(self._db.get(__name__, "loaded_modules", [])).union([args])
+                        set(self.ctx.db.get(__name__, "loaded_modules", [])).union(
+                            [args]
+                        )
                     ),
                 )
         else:
@@ -224,17 +226,19 @@ class LoaderMod(loader.Module):
 
             raise
 
-        self._db.set(__name__, "chosen_preset", args[0])
-        self._db.set(__name__, "loaded_modules", [])
-        self._db.set(__name__, "unloaded_modules", [])
+        self.ctx.db.set(__name__, "chosen_preset", args[0])
+        self.ctx.db.set(__name__, "loaded_modules", [])
+        self.ctx.db.set(__name__, "unloaded_modules", [])
 
         await utils.answer(message, self.strings("preset_loaded", message))
         await self.allmodules.commands["restart"](await message.reply("_"))
 
     async def _get_modules_to_load(self):
-        todo = await self.get_repo_list(self._db.get(__name__, "chosen_preset", None))
-        todo = todo.difference(self._db.get(__name__, "unloaded_modules", []))
-        todo.update(self._db.get(__name__, "loaded_modules", []))
+        todo = await self.get_repo_list(
+            self.ctx.db.get(__name__, "chosen_preset", None)
+        )
+        todo = todo.difference(self.ctx.db.get(__name__, "unloaded_modules", []))
+        todo.update(self.ctx.db.get(__name__, "loaded_modules", []))
         return todo
 
     async def get_repo_list(self, preset=None):
@@ -418,9 +422,9 @@ class LoaderMod(loader.Module):
 
         try:
             try:
-                self.allmodules.send_config_one(instance, self._db, self.babel)
+                self.allmodules.send_config_one(instance, self.ctx.db, self.babel)
                 await self.allmodules.send_ready_one(
-                    instance, self._client, self._db, self.allclients
+                    instance, self.ctx.client, self.ctx.db, self.allclients
                 )
             except loader.LoadError as e:
                 if message:
@@ -444,7 +448,7 @@ class LoaderMod(loader.Module):
 
             modhelp = ""
             prefix = utils.escape_html(
-                (self._db.get(main.__name__, "command_prefix", False) or ".")
+                (self.ctx.db.get(main.__name__, "command_prefix", False) or ".")
             )
 
             if instance.__doc__:
@@ -537,11 +541,11 @@ class LoaderMod(loader.Module):
             await utils.answer(message, self.strings("loading", message))
 
             if await self.load_repo(git_api):
-                self._db.set(
+                self.ctx.db.set(
                     __name__,
                     "loaded_repositories",
                     list(
-                        set(self._db.get(__name__, "loaded_repositories", [])).union(
+                        set(self.ctx.db.get(__name__, "loaded_repositories", [])).union(
                             [repo_url]
                         )
                     ),
@@ -560,7 +564,7 @@ class LoaderMod(loader.Module):
 
         if len(args) == 1:
             repoUrl = args[0]
-            repos = set(self._db.get(__name__, "loaded_repositories", []))
+            repos = set(self.ctx.db.get(__name__, "loaded_repositories", []))
 
             try:
                 repos.remove(repoUrl)
@@ -569,7 +573,7 @@ class LoaderMod(loader.Module):
                     message, self.strings("repo_not_unloaded", message)
                 )
 
-            self._db.set(__name__, "loaded_repositories", list(repos))
+            self.ctx.db.set(__name__, "loaded_repositories", list(repos))
 
             await utils.answer(message, self.strings("repo_unloaded", message))
         else:
@@ -618,12 +622,14 @@ class LoaderMod(loader.Module):
                 unescape_percent(mod[len("friendly-telegram.modules.") :])
             ]
 
-        it = set(self._db.get(__name__, "loaded_modules", [])).difference(
+        it = set(self.ctx.db.get(__name__, "loaded_modules", [])).difference(
             without_prefix
         )
-        self._db.set(__name__, "loaded_modules", list(it))
-        it = set(self._db.get(__name__, "unloaded_modules", [])).union(without_prefix)
-        self._db.set(__name__, "unloaded_modules", list(it))
+        self.ctx.db.set(__name__, "loaded_modules", list(it))
+        it = set(self.ctx.db.get(__name__, "unloaded_modules", [])).union(
+            without_prefix
+        )
+        self.ctx.db.set(__name__, "unloaded_modules", list(it))
 
         await utils.answer(
             message, self.strings("unloaded" if worked else "not_unloaded", message)
@@ -632,12 +638,12 @@ class LoaderMod(loader.Module):
     @loader.owner
     async def clearmodulescmd(self, message: Message) -> None:
         """Delete all installed modules"""
-        self._db.set("friendly-telegram.modules.loader", "loaded_modules", [])
-        self._db.set("friendly-telegram.modules.loader", "unloaded_modules", [])
+        self.ctx.db.set("friendly-telegram.modules.loader", "loaded_modules", [])
+        self.ctx.db.set("friendly-telegram.modules.loader", "unloaded_modules", [])
 
         await utils.answer(message, self.strings("all_modules_deleted", message))
 
-        self._db.set(__name__, "chosen_preset", "none")
+        self.ctx.db.set(__name__, "chosen_preset", "none")
 
         await self.allmodules.commands["restart"](await message.reply("_"))
 
@@ -646,13 +652,11 @@ class LoaderMod(loader.Module):
 
         await asyncio.gather(*[self.download_and_install(mod) for mod in todo])
 
-        repos = set(self._db.get(__name__, "loaded_repositories", []))
+        repos = set(self.ctx.db.get(__name__, "loaded_repositories", []))
 
         await asyncio.gather(*[self.load_repo(get_git_api(url)) for url in repos])
 
     async def client_ready(self, client, db):
-        self._db = db
-        self._client = client
         await self._update_modules()
 
 

@@ -50,10 +50,6 @@ class PythonMod(loader.Module):
         ),
     }
 
-    async def client_ready(self, client, db):
-        self._client = client
-        self._db = db
-
     def lookup(self, modname: str):
         return next(
             (
@@ -75,13 +71,13 @@ class PythonMod(loader.Module):
 
     async def inline__allow(self, call: InlineCall) -> None:
         await call.answer("Now you can access db through .e command", show_alert=True)
-        self._db.set(main.__name__, "enable_db_eval", True)
+        self.ctx.db.set(main.__name__, "enable_db_eval", True)
         await call.delete()
 
     @loader.owner
     async def ecmd(self, message: Message) -> None:
         """Evaluates python code"""
-        phone = self._client.phone
+        phone = self.ctx.client.phone
         ret = self.strings("eval", message)
         try:
             it = await meval(
@@ -124,7 +120,7 @@ class PythonMod(loader.Module):
         return {
             **{
                 "message": message,
-                "client": self._client,
+                "client": self.ctx.client,
                 "reply": reply,
                 "r": reply,
                 **self.get_sub(telethon.tl.types),
@@ -135,7 +131,7 @@ class PythonMod(loader.Module):
                 "utils": utils,
                 "main": main,
                 "f": telethon.tl.functions,
-                "c": self._client,
+                "c": self.ctx.client,
                 "m": message,
                 "loader": loader,
                 "lookup": self.lookup,
@@ -143,9 +139,9 @@ class PythonMod(loader.Module):
             },
             **(
                 {
-                    "db": self._db,
+                    "db": self.ctx.db,
                 }
-                if self._db.get(main.__name__, "enable_db_eval", False)
+                if self.ctx.db.get(main.__name__, "enable_db_eval", False)
                 else {
                     "db": FakeDb(),
                 }

@@ -92,16 +92,14 @@ class GeekSecurityMod(loader.Module):
     }
 
     def get(self, *args) -> dict:
-        return self._db.get(self.strings["name"], *args)
+        return self.ctx.db.get(self.strings["name"], *args)
 
     def set(self, *args) -> None:
-        return self._db.set(self.strings["name"], *args)
+        return self.ctx.db.set(self.strings["name"], *args)
 
     async def client_ready(self, client, db) -> None:
-        self._db = db
-        self._client = client
         self.prefix = utils.escape_html(
-            (self._db.get(main.__name__, "command_prefix", False) or ".")
+            (self.ctx.db.get(main.__name__, "command_prefix", False) or ".")
         )
 
         self._me = (await client.get_me()).id
@@ -111,7 +109,7 @@ class GeekSecurityMod(loader.Module):
         self, call: InlineCall, command: str, group: str, level: bool
     ) -> None:
         cmd = self.allmodules.commands[command]
-        mask = self._db.get(security.__name__, "masks", {}).get(
+        mask = self.ctx.db.get(security.__name__, "masks", {}).get(
             f"{cmd.__module__}.{cmd.__name__}",
             getattr(cmd, "security", security.DEFAULT_PERMISSIONS),
         )
@@ -123,9 +121,9 @@ class GeekSecurityMod(loader.Module):
         else:
             mask &= ~bit
 
-        masks = self._db.get(security.__name__, "masks", {})
+        masks = self.ctx.db.get(security.__name__, "masks", {})
         masks[f"{cmd.__module__}.{cmd.__name__}"] = mask
-        self._db.set(security.__name__, "masks", masks)
+        self.ctx.db.set(security.__name__, "masks", masks)
 
         await call.answer("Security value set!")
         await call.edit(
@@ -136,7 +134,7 @@ class GeekSecurityMod(loader.Module):
     async def inline__switch_perm_bm(
         self, call: InlineCall, group: str, level: bool
     ) -> None:
-        mask = self._db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
+        mask = self.ctx.db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
         bit = security.BITMAP[group.upper()]
 
         if level:
@@ -144,7 +142,7 @@ class GeekSecurityMod(loader.Module):
         else:
             mask &= ~bit
 
-        self._db.set(security.__name__, "bounding_mask", mask)
+        self.ctx.db.set(security.__name__, "bounding_mask", mask)
 
         await call.answer("Bounding mask value set!")
         await call.edit(
@@ -187,7 +185,7 @@ class GeekSecurityMod(loader.Module):
 
     def _get_current_bm(self) -> dict:
         return self._perms_map(
-            self._db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
+            self.ctx.db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
         )
 
     @staticmethod
@@ -209,10 +207,10 @@ class GeekSecurityMod(loader.Module):
         }
 
     def _get_current_perms(self, command: FunctionType) -> dict:
-        config = self._db.get(security.__name__, "masks", {}).get(
+        config = self.ctx.db.get(security.__name__, "masks", {}).get(
             f"{command.__module__}.{command.__name__}",
             getattr(
-                command, "security", self._client.dispatcher.security._default
+                command, "security", self.ctx.client.dispatcher.security._default
             ),  # skipcq: PYL-W0212
         )
 
@@ -258,12 +256,12 @@ class GeekSecurityMod(loader.Module):
                 if str(args).isdigit():
                     args = int(args)
 
-                user = await self._client.get_entity(args)
+                user = await self.ctx.client.get_entity(args)
             except Exception:
                 pass
 
         if user is None:
-            user = await self._client.get_entity(reply.sender_id)
+            user = await self.ctx.client.get_entity(reply.sender_id)
 
         if not isinstance(user, (User, PeerUser)):
             await utils.answer(message, self.strings("not_a_user"))
@@ -288,7 +286,7 @@ class GeekSecurityMod(loader.Module):
                 return
 
         if isinstance(user, int):
-            user = await self._client.get_entity(user)
+            user = await self.ctx.client.get_entity(user)
 
         if self._is_geek and not confirmed:
             await self.inline.form(
@@ -313,10 +311,10 @@ class GeekSecurityMod(loader.Module):
             )
             return
 
-        self._db.set(
+        self.ctx.db.set(
             security.__name__,
             group,
-            list(set(self._db.get(security.__name__, group, []) + [user.id])),
+            list(set(self.ctx.db.get(security.__name__, group, []) + [user.id])),
         )
 
         m = self.strings(f"{group}_added").format(
@@ -340,10 +338,10 @@ class GeekSecurityMod(loader.Module):
         if not user:
             return
 
-        self._db.set(
+        self.ctx.db.set(
             security.__name__,
             group,
-            list(set(self._db.get(security.__name__, group, [])) - {user.id}),
+            list(set(self.ctx.db.get(security.__name__, group, [])) - {user.id}),
         )
 
         m = self.strings(f"{group}_removed").format(
@@ -358,11 +356,11 @@ class GeekSecurityMod(loader.Module):
 
     async def _list_group(self, message: Message, group: str) -> None:
         _resolved_users = []
-        for user in self._db.get(security.__name__, group, []) + (
+        for user in self.ctx.db.get(security.__name__, group, []) + (
             [self._me] if group == "owner" else []
         ):
             try:
-                _resolved_users += [await self._client.get_entity(user)]
+                _resolved_users += [await self.ctx.client.get_entity(user)]
             except Exception:
                 pass
 

@@ -54,14 +54,12 @@ class GeekConfigMod(loader.Module):
     }
 
     def get(self, *args) -> dict:
-        return self._db.get(self.strings["name"], *args)
+        return self.ctx.db.get(self.strings["name"], *args)
 
     def set(self, *args) -> None:
-        return self._db.set(self.strings["name"], *args)
+        return self.ctx.db.set(self.strings["name"], *args)
 
     async def client_ready(self, client, db) -> None:
-        self._db = db
-        self._client = client
         self._bot_id = (await self.inline.bot.get_me()).id
         self._forms = {}
 
@@ -85,19 +83,19 @@ class GeekConfigMod(loader.Module):
                         query = ast.literal_eval(query)
                     except (ValueError, SyntaxError):
                         pass
-                    self._db.setdefault(module.__module__, {}).setdefault(
+                    self.ctx.db.setdefault(module.__module__, {}).setdefault(
                         "__config__", {}
                     )[option] = query
                 else:
                     try:
-                        del self._db.setdefault(module.__module__, {}).setdefault(
+                        del self.ctx.db.setdefault(module.__module__, {}).setdefault(
                             "__config__", {}
                         )[option]
                     except KeyError:
                         pass
 
-                self.allmodules.send_config_one(module, self._db, skip_hook=True)
-                self._db.save()
+                self.allmodules.send_config_one(module, self.ctx.db, skip_hook=True)
+                self.ctx.db.save()
 
         await call.edit(
             self.strings("option_saved").format(mod, option, query),
