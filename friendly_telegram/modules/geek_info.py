@@ -68,31 +68,42 @@ class GeekInfoMod(loader.Module):
         try:
             repo = git.Repo()
             diff = repo.git.log(["HEAD..origin", "--oneline"])
+            # Self-contained HTML: the previous default ("...</b>...<b>") was
+            # built for a template whose surrounding <b> got removed long ago,
+            # leaving an unbalanced </b> that broke caption parsing whenever
+            # the bot was behind origin.
             upd = (
-                "⚠️ Update required </b><code>.update</code><b>"
+                "⚠️ <b>Update required:</b> <code>.update</code>"
                 if diff
-                else "✅ Up-to-date"
+                else "✅ <b>Up-to-date</b>"
             )
         except Exception:
             upd = ""
         ver, gitlink = utils.get_git_info()
+        owner = (
+            f'<a href="tg://user?id={self._me.id}">'
+            f"{utils.escape_html(get_display_name(self._me) or '')}</a>"
+        )
+        sha = utils.escape_html((ver or "")[:8] or "Unknown")
+        build = f'<a href="{utils.escape_html(gitlink or "")}">{sha}</a>'
+        fmt = (
+            self.config["custom_message"]
+            if self.config["custom_message"]
+            else self.strings("default_message")
+        )
         try:
-            return (
-                self.config["custom_message"]
-                if self.config["custom_message"]
-                else self.strings("default_message")
-            ).format(
-                owner=f'<a href="tg://user?id={self._me.id}">{get_display_name(self._me)}</a>',
-                version=utils.get_version_raw(),
-                build=f'<a href="{gitlink}">{ver[:8] or "Unknown"}</a>',
+            return fmt.format(
+                owner=owner,
+                version=utils.escape_html(utils.get_version_raw()),
+                build=build,
                 upd=upd,
                 platform=utils.get_platform_name(),
             )
         except KeyError:
             return self.strings("default_message").format(
-                owner=f'<a href="tg://user?id={self._me.id}">{get_display_name(self._me)}</a>',
-                version=utils.get_version_raw(),
-                build=f'<a href="{gitlink}">{ver[:8] or "Unknown"}</a>',
+                owner=owner,
+                version=utils.escape_html(utils.get_version_raw()),
+                build=build,
                 upd=upd,
                 platform=utils.get_platform_name(),
             )
