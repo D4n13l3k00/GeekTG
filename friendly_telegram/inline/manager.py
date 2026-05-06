@@ -643,12 +643,15 @@ class InlineManager:
                             f"properly. {button}"
                         )
                 except KeyError:
+                    # Drop the malformed button rather than the whole markup —
+                    # ``return False`` here used to feed a bool back to
+                    # InlineQueryResult.reply_markup, which pydantic silently
+                    # coerces, leaving the form unbutton'd with no diagnostic.
                     logger.exception(
-                        "Error while forming markup! Probably, you "
-                        "passed wrong type combination for button. "
-                        "Contact developer of module."
+                        "[inline-diag] dropping malformed button %r in form_uid=%s",
+                        button,
+                        form_uid if isinstance(form_uid, str) else "<inline>",
                     )
-                    return False
 
             rows.append(line)
 
@@ -819,41 +822,72 @@ class InlineManager:
 
         # If we don't know, what this query is for, just ignore it
         if query not in self._forms:
+            logger.warning(
+                "[inline-diag] inline_query uid=%s not in self._forms"
+                " (have %d forms) — ignoring",
+                query,
+                len(self._forms),
+            )
             return
 
-        # Otherwise, answer it with templated form
-        await inline_query.answer(
-            (
-                [
-                    InlineQueryResultPhoto(
-                        id=rand(20),
-                        title="GeekTG",
-                        photo_url=self._forms[query]["photo"],
-                        caption=self._forms[query]["text"],
-                        reply_markup=self._generate_markup(query),
-                        thumbnail_url=self._forms[query]["photo"],
-                    )
-                ]
-                if self._forms[query]["photo"]
-                else [
-                    InlineQueryResultArticle(
-                        id=rand(20),
-                        title="GeekTG",
-                        input_message_content=InputTextMessageContent(
-                            message_text=self._forms[query]["text"],
-                            link_preview_options=LinkPreviewOptions(is_disabled=True),
-                        ),
-                        reply_markup=self._generate_markup(query),
-                    )
-                ]
-            ),
-            # cache_time=0 because every form_uid is unique per form() call,
-            # so caching can never produce a legitimate hit — but it CAN
-            # poison a retry: when Telegram fails to deliver the first
-            # answer (e.g. unreachable photo URL) the bot's next answer
-            # for the same uid is silently shadowed by the cached failure.
-            cache_time=0,
+        form_state = self._forms[query]
+        is_photo = bool(form_state["photo"])
+        try:
+            markup = self._generate_markup(query)
+        except Exception:
+            logger.exception("[inline-diag] _generate_markup failed for uid=%s", query)
+            raise
+
+        logger.warning(
+            "[inline-diag] answering inline_query uid=%s as %s"
+            " text_len=%d photo_url=%s markup_rows=%s",
+            query,
+            "photo" if is_photo else "article",
+            len(form_state["text"]),
+            form_state["photo"] if is_photo else None,
+            len(markup.inline_keyboard) if markup else "<none>",
         )
+
+        try:
+            await inline_query.answer(
+                (
+                    [
+                        InlineQueryResultPhoto(
+                            id=rand(20),
+                            title="GeekTG",
+                            photo_url=form_state["photo"],
+                            caption=form_state["text"],
+                            reply_markup=markup,
+                            thumbnail_url=form_state["photo"],
+                        )
+                    ]
+                    if is_photo
+                    else [
+                        InlineQueryResultArticle(
+                            id=rand(20),
+                            title="GeekTG",
+                            input_message_content=InputTextMessageContent(
+                                message_text=form_state["text"],
+                                link_preview_options=LinkPreviewOptions(
+                                    is_disabled=True
+                                ),
+                            ),
+                            reply_markup=markup,
+                        )
+                    ]
+                ),
+                # cache_time=0 because every form_uid is unique per form() call,
+                # so caching can never produce a legitimate hit — but it CAN
+                # poison a retry by letting TG serve a stale failed answer.
+                cache_time=0,
+            )
+        except Exception:
+            logger.exception(
+                "[inline-diag] answer_inline_query API call failed for uid=%s",
+                query,
+            )
+            raise
+        logger.warning("[inline-diag] answer_inline_query OK for uid=%s", query)
 
     async def _callback_query_handler(self, query: CallbackQuery) -> None:
         """Callback query handler (buttons' presses).
@@ -1112,8 +1146,26 @@ class InlineManager:
             "uid": form_uid,
         }
 
-        async def _query_and_click():
-            q = await self._client.inline_query(self.bot_username, form_uid)
+        logger.warning(
+            "[inline-diag] form() prepared uid=%s photo=%s text_len=%d buttons=%d",
+            form_uid,
+            "yes" if photo else "no",
+            len(text),
+            sum(len(row) for row in reply_markup),
+        )
+
+        async def _query_and_click(uid):
+            t0 = time.monotonic()
+            logger.warning(
+                "[inline-diag] form() sending GetInlineBotResults uid=%s", uid
+            )
+            q = await self._client.inline_query(self.bot_username, uid)
+            logger.warning(
+                "[inline-diag] form() got %d result(s) for uid=%s after %.2fs",
+                len(q),
+                uid,
+                time.monotonic() - t0,
+            )
             return await q[0].click(
                 utils.get_chat_id(message) if isinstance(message, Message) else message,
                 reply_to=(
@@ -1121,36 +1173,39 @@ class InlineManager:
                 ),
             )
 
+        async def _rotate(old_uid, *, drop_photo):
+            """Move the form data to a fresh uid so the retry isn't shadowed by
+            whatever per-(bot, query) state TG carries from the failed attempt."""
+            new_uid = rand(30)
+            data = self._forms.pop(old_uid)
+            data["uid"] = new_uid
+            if drop_photo:
+                data["photo"] = None
+            self._forms[new_uid] = data
+            return new_uid
+
         try:
-            m = await _query_and_click()
+            m = await _query_and_click(form_uid)
         except BotResponseTimeoutError:
-            # Telegram silently dropped our inline answer — the most common
-            # cause is the photo URL being unreachable or rejected by TG's
-            # fetcher. Retry once as a plain article so the user at least
-            # sees the form text instead of nothing.
-            if self._forms[form_uid].get("photo"):
-                logger.warning(
-                    "inline.form(): photo answer timed out for form_uid=%s,"
-                    " retrying as article",
-                    form_uid,
-                )
-                self._forms[form_uid]["photo"] = None
-                try:
-                    m = await _query_and_click()
-                except Exception:
-                    logger.exception(
-                        "inline.form() article retry also failed for form_uid=%s",
-                        form_uid,
-                    )
-                    m = None
-            else:
-                logger.exception(
-                    "inline.form() failed for form_uid=%s (no photo to drop)",
-                    form_uid,
-                )
+            # Telegram silently dropped our inline answer. Even with cache_time=0,
+            # the same form_uid keeps timing out — TG seems to carry per-query
+            # state for at least a few seconds. Retry on a brand-new uid.
+            had_photo = bool(self._forms[form_uid].get("photo"))
+            logger.warning(
+                "[inline-diag] form() timed out uid=%s photo=%s — retrying"
+                " on fresh uid%s",
+                form_uid,
+                "yes" if had_photo else "no",
+                " as article" if had_photo else "",
+            )
+            form_uid = await _rotate(form_uid, drop_photo=had_photo)
+            try:
+                m = await _query_and_click(form_uid)
+            except Exception:
+                logger.exception("inline.form() retry also failed for uid=%s", form_uid)
                 m = None
         except Exception:
-            logger.exception("inline.form() failed for form_uid=%s", form_uid)
+            logger.exception("inline.form() failed for uid=%s", form_uid)
             m = None
 
         if m is None:
