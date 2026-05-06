@@ -41,6 +41,7 @@ from aiogram.types import (
 )
 from aiogram.types import Message as AiogramMessage
 from telethon.errors.rpcerrorlist import (
+    BotResponseTimeoutError,
     InputUserDeactivatedError,
     YouBlockedUserError,
 )
@@ -1106,20 +1107,48 @@ class InlineManager:
             "uid": form_uid,
         }
 
-        try:
+        async def _query_and_click():
             q = await self._client.inline_query(self.bot_username, form_uid)
-            m = await q[0].click(
+            return await q[0].click(
                 utils.get_chat_id(message) if isinstance(message, Message) else message,
                 reply_to=(
                     message.reply_to_msg_id if isinstance(message, Message) else None
                 ),
             )
+
+        try:
+            m = await _query_and_click()
+        except BotResponseTimeoutError:
+            # Telegram silently dropped our inline answer — the most common
+            # cause is the photo URL being unreachable or rejected by TG's
+            # fetcher. Retry once as a plain article so the user at least
+            # sees the form text instead of nothing.
+            if self._forms[form_uid].get("photo"):
+                logger.warning(
+                    "inline.form(): photo answer timed out for form_uid=%s,"
+                    " retrying as article",
+                    form_uid,
+                )
+                self._forms[form_uid]["photo"] = None
+                try:
+                    m = await _query_and_click()
+                except Exception:
+                    logger.exception(
+                        "inline.form() article retry also failed for form_uid=%s",
+                        form_uid,
+                    )
+                    m = None
+            else:
+                logger.exception(
+                    "inline.form() failed for form_uid=%s (no photo to drop)",
+                    form_uid,
+                )
+                m = None
         except Exception:
-            # The user-facing message just says "check logs" but the original
-            # code never actually logged the cause, so the trail ended here.
-            # Surface it so failures (validation, RPC errors, no result from
-            # the inline bot, …) show up in stdout/.logs.
             logger.exception("inline.form() failed for form_uid=%s", form_uid)
+            m = None
+
+        if m is None:
             msg = (
                 "🚫 <b>A problem occurred with inline bot "
                 "while processing query. Check logs for "
