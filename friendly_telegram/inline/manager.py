@@ -774,7 +774,7 @@ class InlineManager:
                                 ),
                             )
                         ],
-                        cache_time=60,
+                        cache_time=0,
                     )
                     return
 
@@ -847,7 +847,12 @@ class InlineManager:
                     )
                 ]
             ),
-            cache_time=60,
+            # cache_time=0 because every form_uid is unique per form() call,
+            # so caching can never produce a legitimate hit — but it CAN
+            # poison a retry: when Telegram fails to deliver the first
+            # answer (e.g. unreachable photo URL) the bot's next answer
+            # for the same uid is silently shadowed by the cached failure.
+            cache_time=0,
         )
 
     async def _callback_query_handler(self, query: CallbackQuery) -> None:
