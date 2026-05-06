@@ -41,7 +41,6 @@ from aiogram.types import (
 )
 from aiogram.types import Message as AiogramMessage
 from telethon.errors.rpcerrorlist import (
-    BotResponseTimeoutError,
     InputUserDeactivatedError,
     YouBlockedUserError,
 )
@@ -475,30 +474,6 @@ class InlineManager:
         self._dp.chosen_inline_result.register(self._chosen_inline_handler)
         self._dp.message.register(self._message_handler)
 
-        # Trace every incoming update before aiogram routes it to an
-        # observer. WARNING level so it surfaces under the default log
-        # config (root handler is at WARNING by default — INFO would be
-        # invisible while debugging "buttons don't work").
-        @self._dp.update.outer_middleware()
-        async def _trace_update(handler, event, data):
-            present = next(
-                (
-                    k
-                    for k in (
-                        "callback_query",
-                        "inline_query",
-                        "chosen_inline_result",
-                        "message",
-                        "edited_message",
-                        "channel_post",
-                    )
-                    if getattr(event, k, None) is not None
-                ),
-                "<unknown>",
-            )
-            logger.warning("[inline-diag] update %s: %s", event.update_id, present)
-            return await handler(event, data)
-
         # ``dp.errors`` in v3 catches *handler* exceptions, not polling-loop
         # errors. Use it only for the unauth case where we want to stop the
         # bot cleanly. Conflict / network errors are handled by aiogram's own
@@ -530,7 +505,6 @@ class InlineManager:
         # Force-resolve from our registered observers and pass it through —
         # this overwrites the server-side memory on the first call.
         allowed = self._dp.resolve_used_update_types()
-        logger.warning("[inline-diag] polling start; allowed_updates=%s", allowed)
 
         # handle_signals=False — userbot's web logout flow installs its own
         # SIGTERM handler via os.kill(); we don't want aiogram to swallow it.
@@ -648,9 +622,7 @@ class InlineManager:
                     # InlineQueryResult.reply_markup, which pydantic silently
                     # coerces, leaving the form unbutton'd with no diagnostic.
                     logger.exception(
-                        "[inline-diag] dropping malformed button %r in form_uid=%s",
-                        button,
-                        form_uid if isinstance(form_uid, str) else "<inline>",
+                        "Dropping malformed button %r from form markup", button
                     )
 
             rows.append(line)
@@ -659,11 +631,6 @@ class InlineManager:
 
     async def _inline_handler(self, inline_query: InlineQuery) -> None:
         """Inline query handler (forms' calls)"""
-        logger.warning(
-            "[inline-diag] inline_query q=%r from=%s",
-            inline_query.query,
-            inline_query.from_user.id,
-        )
         # Retrieve query from passed object
         query = inline_query.query
 
@@ -822,72 +789,39 @@ class InlineManager:
 
         # If we don't know, what this query is for, just ignore it
         if query not in self._forms:
-            logger.warning(
-                "[inline-diag] inline_query uid=%s not in self._forms"
-                " (have %d forms) — ignoring",
-                query,
-                len(self._forms),
-            )
             return
 
         form_state = self._forms[query]
-        is_photo = bool(form_state["photo"])
-        try:
-            markup = self._generate_markup(query)
-        except Exception:
-            logger.exception("[inline-diag] _generate_markup failed for uid=%s", query)
-            raise
-
-        logger.warning(
-            "[inline-diag] answering inline_query uid=%s as %s"
-            " text_len=%d photo_url=%s markup_rows=%s",
-            query,
-            "photo" if is_photo else "article",
-            len(form_state["text"]),
-            form_state["photo"] if is_photo else None,
-            len(markup.inline_keyboard) if markup else "<none>",
+        await inline_query.answer(
+            (
+                [
+                    InlineQueryResultPhoto(
+                        id=rand(20),
+                        title="GeekTG",
+                        photo_url=form_state["photo"],
+                        caption=form_state["text"],
+                        reply_markup=self._generate_markup(query),
+                        thumbnail_url=form_state["photo"],
+                    )
+                ]
+                if form_state["photo"]
+                else [
+                    InlineQueryResultArticle(
+                        id=rand(20),
+                        title="GeekTG",
+                        input_message_content=InputTextMessageContent(
+                            message_text=form_state["text"],
+                            link_preview_options=LinkPreviewOptions(is_disabled=True),
+                        ),
+                        reply_markup=self._generate_markup(query),
+                    )
+                ]
+            ),
+            # form_uid is unique per form() call, so caching can never produce
+            # a legitimate hit — but it can poison a retry by letting TG serve
+            # a stale failed answer.
+            cache_time=0,
         )
-
-        try:
-            await inline_query.answer(
-                (
-                    [
-                        InlineQueryResultPhoto(
-                            id=rand(20),
-                            title="GeekTG",
-                            photo_url=form_state["photo"],
-                            caption=form_state["text"],
-                            reply_markup=markup,
-                            thumbnail_url=form_state["photo"],
-                        )
-                    ]
-                    if is_photo
-                    else [
-                        InlineQueryResultArticle(
-                            id=rand(20),
-                            title="GeekTG",
-                            input_message_content=InputTextMessageContent(
-                                message_text=form_state["text"],
-                                link_preview_options=LinkPreviewOptions(
-                                    is_disabled=True
-                                ),
-                            ),
-                            reply_markup=markup,
-                        )
-                    ]
-                ),
-                # cache_time=0 because every form_uid is unique per form() call,
-                # so caching can never produce a legitimate hit — but it CAN
-                # poison a retry by letting TG serve a stale failed answer.
-                cache_time=0,
-            )
-        except Exception:
-            logger.exception(
-                "[inline-diag] answer_inline_query API call failed for uid=%s",
-                query,
-            )
-            raise
-        logger.warning("[inline-diag] answer_inline_query OK for uid=%s", query)
 
     async def _callback_query_handler(self, query: CallbackQuery) -> None:
         """Callback query handler (buttons' presses).
@@ -897,12 +831,6 @@ class InlineManager:
         data — leaving the legacy kwarg in here invited a foreign middleware
         to inject something and crash dispatch silently. Dropped.
         """
-        logger.warning(
-            "[inline-diag] callback_query data=%r from=%s",
-            query.data,
-            query.from_user.id,
-        )
-
         # First, dispatch all registered callback handlers
         for mod in self._allmodules.modules:
             if (
@@ -1146,65 +1074,18 @@ class InlineManager:
             "uid": form_uid,
         }
 
-        logger.warning(
-            "[inline-diag] form() prepared uid=%s photo=%s text_len=%d buttons=%d",
-            form_uid,
-            "yes" if photo else "no",
-            len(text),
-            sum(len(row) for row in reply_markup),
-        )
-
-        async def _query_and_click(uid):
-            t0 = time.monotonic()
-            logger.warning(
-                "[inline-diag] form() sending GetInlineBotResults uid=%s", uid
-            )
-            q = await self._client.inline_query(self.bot_username, uid)
-            logger.warning(
-                "[inline-diag] form() got %d result(s) for uid=%s after %.2fs",
-                len(q),
-                uid,
-                time.monotonic() - t0,
-            )
-            return await q[0].click(
+        try:
+            q = await self._client.inline_query(self.bot_username, form_uid)
+            m = await q[0].click(
                 utils.get_chat_id(message) if isinstance(message, Message) else message,
                 reply_to=(
                     message.reply_to_msg_id if isinstance(message, Message) else None
                 ),
             )
-
-        async def _rotate(old_uid, *, drop_photo):
-            """Move the form data to a fresh uid so the retry isn't shadowed by
-            whatever per-(bot, query) state TG carries from the failed attempt."""
-            new_uid = rand(30)
-            data = self._forms.pop(old_uid)
-            data["uid"] = new_uid
-            if drop_photo:
-                data["photo"] = None
-            self._forms[new_uid] = data
-            return new_uid
-
-        try:
-            m = await _query_and_click(form_uid)
-        except BotResponseTimeoutError:
-            # Telegram silently dropped our inline answer. Even with cache_time=0,
-            # the same form_uid keeps timing out — TG seems to carry per-query
-            # state for at least a few seconds. Retry on a brand-new uid.
-            had_photo = bool(self._forms[form_uid].get("photo"))
-            logger.warning(
-                "[inline-diag] form() timed out uid=%s photo=%s — retrying"
-                " on fresh uid%s",
-                form_uid,
-                "yes" if had_photo else "no",
-                " as article" if had_photo else "",
-            )
-            form_uid = await _rotate(form_uid, drop_photo=had_photo)
-            try:
-                m = await _query_and_click(form_uid)
-            except Exception:
-                logger.exception("inline.form() retry also failed for uid=%s", form_uid)
-                m = None
         except Exception:
+            # The original code swallowed everything silently while telling the
+            # user to "check logs" — surface the cause so the next regression
+            # actually leaves a trail.
             logger.exception("inline.form() failed for uid=%s", form_uid)
             m = None
 
