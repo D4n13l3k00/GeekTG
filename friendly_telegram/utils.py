@@ -480,7 +480,7 @@ async def get_user(message):
     try:
         return await message.client.get_entity(message.sender_id)
     except ValueError:  # Not in database. Lets go looking for them.
-        logging.debug("user not in session cache. searching...")
+        pass
 
     if isinstance(message.peer_id, PeerUser):
         try:

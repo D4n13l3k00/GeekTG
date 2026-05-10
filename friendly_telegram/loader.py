@@ -280,8 +280,6 @@ class Modules:
                     )
                 ]
 
-        logging.debug(mods)
-
         for mod in mods:
             try:
                 # Use the historical package name as prefix so cloud-DB keys
@@ -290,7 +288,6 @@ class Modules:
                 module_name = (
                     f"friendly-telegram.{MODULES_NAME}.{os.path.basename(mod)[:-3]}"
                 )
-                logging.debug(module_name)
                 spec = importlib.util.spec_from_file_location(module_name, mod)
                 self.register_module(spec, module_name)
             except BaseException as e:

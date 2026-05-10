@@ -201,7 +201,6 @@ def parse_arguments():
         help="Print the resolved data directory (sessions, config, modules) and exit",
     )
     arguments = parser.parse_args()
-    logging.debug(arguments)
     # ``asyncio.run`` (used by ``main()``) selects ProactorEventLoop on
     # Windows automatically since Python 3.8 — no manual setup needed.
     return arguments
@@ -642,7 +641,6 @@ async def amain(first, client, allclients, web, arguments):
     db = frontend.Database(db)
     await db.init()
 
-    logging.debug("got db")
     logging.info("Loading logging config...")
     for handler in handlers:
         handler.setLevel(db.get(__name__, "loglevel", logging.INFO))

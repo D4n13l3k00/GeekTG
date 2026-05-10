@@ -128,14 +128,10 @@ class CommandDispatcher:
         else:
             return
 
-        logging.debug("Incoming command!")
-
         if event.sticker or event.dice or event.audio:
-            logging.debug("Ignoring invisible or potentially forwarded command.")
             return
 
         if event.via_bot_id:
-            logging.debug("Ignoring inline bot.")
             return
 
         message = utils.censor(event.message)
@@ -146,7 +142,6 @@ class CommandDispatcher:
         if utils.get_chat_id(message) in blacklist_chats or (
             whitelist_chats and utils.get_chat_id(message) not in whitelist_chats
         ):
-            logging.debug("Message is blacklisted")
             return
 
         if (
@@ -164,7 +159,6 @@ class CommandDispatcher:
             )
             return
 
-        logging.debug(message)
         # Make sure we don't get confused about spaces or other stuff in the prefix
         message.message = message.message[len(prefix) :]
 
@@ -205,7 +199,6 @@ class CommandDispatcher:
             and command not in self._db.get(main.__name__, "nonickcmds", [])
             and initiator not in self._db.get(main.__name__, "nonickusers", [])
         ):
-            logging.debug("Ignoring message without nickname")
             return
 
         txt, func = self._modules.dispatch(tag[0])
@@ -233,7 +226,6 @@ class CommandDispatcher:
                 str(utils.get_chat_id(message)) + "." + func.__self__.__module__
                 in blacklist_chats
             ):
-                logging.debug("Command is blacklisted in chat")
                 return
 
             if (
@@ -241,7 +233,6 @@ class CommandDispatcher:
                 and f"{utils.get_chat_id(message)}.{func.__self__.__module__}"
                 not in whitelist_modules
             ):  # noqa
-                logging.debug("Command is not whitelisted in chat")
                 return
 
             if self._db.get(main.__name__, "grep", False):
@@ -388,7 +379,6 @@ class CommandDispatcher:
         if utils.get_chat_id(message) in blacklist_chats or (
             whitelist_chats and utils.get_chat_id(message) not in whitelist_chats
         ):
-            logging.debug("Message is blacklisted")
             return
 
         for func in self._modules.watchers:
@@ -410,14 +400,12 @@ class CommandDispatcher:
                     and message.out
                 )
             ):
-                logging.debug(f"Ignored watcher of module {modname}")
                 continue
 
             if (
                 f"{str(utils.get_chat_id(message))}.{func.__self__.__module__}"
                 in blacklist_chats
             ):
-                logging.debug("Command is blacklisted in chat")
                 continue
 
             if (
@@ -425,10 +413,9 @@ class CommandDispatcher:
                 and (f"{str(utils.get_chat_id(message))}." + func.__self__.__module__)
                 not in whitelist_modules
             ):
-                logging.debug("Command is not whitelisted in chat")
                 continue
 
             try:
                 await func(message)
             except Exception as e:
-                logging.exception(f"Error running watcher {e}")
+                logging.exception("Error running watcher: %s", e)
