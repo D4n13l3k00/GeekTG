@@ -39,6 +39,7 @@ dependencies = [
     # runtime dep; the only consumer (web/status.py) probes for it via
     # ``_try_psutil()`` and degrades to "stats unavailable" when missing.
     'psutil>=5.9; sys_platform != "android"',
+    "audioop-lts>=0.2.1; python_version>='3.13'",
 ]
 
 # Heavy media-processing libraries that many third-party modules pull in
