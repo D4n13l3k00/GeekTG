@@ -1,10 +1,16 @@
-"""YouTube-Dl module — download audio/video from supported sites via yt-dlp."""
+"""Download audio/video from any yt-dlp-supported site.
 
-# requires: yt-dlp
+Three commands:
+
+* ``.ripv`` / ``.ripa`` — quick best-quality video / 320k mp3 grabs.
+* ``.ytdl`` — probes the source first and lets the user pick a specific
+  format (with a thumbnail preview) via an inline picker.
+"""
 
 import asyncio
 import contextlib
 import functools
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -28,6 +34,8 @@ from yt_dlp.utils import (
 
 from .. import loader, utils
 from ..inline.types import InlineCall
+
+logger = logging.getLogger(__name__)
 
 _YT_RE = re.compile(r"^(https?://)?(www\.)?(youtube\.com|youtu\.?be)/.+$")
 _DB_NAME = "YtDl"
@@ -256,6 +264,7 @@ class YtDlMod(loader.Module):
 
     # --------------------------------------------------------------- commands
 
+    @loader.owner
     async def swripcmd(self, m: Message):
         "Switch autodownload in the chat"
         if not m.chat:
@@ -270,6 +279,7 @@ class YtDlMod(loader.Module):
         self._save_chats(chats)
         await utils.answer(m, self.strings("switch").format("ON" if is_on else "OFF"))
 
+    @loader.owner
     async def ripvcmd(self, m: Message):
         """.ripv <link / reply_to_link> - download video (best quality)"""
         url = await self._resolve_url(m, is_watcher=False)
@@ -277,6 +287,7 @@ class YtDlMod(loader.Module):
             return await utils.answer(m, self.strings("noargs", m))
         await self._download_video(m, url, "best", reply=await m.get_reply_message())
 
+    @loader.owner
     async def ripacmd(self, m: Message):
         """.ripa <link / reply_to_link> - download audio (mp3 320k)"""
         url = await self._resolve_url(m, is_watcher=False)
@@ -284,6 +295,7 @@ class YtDlMod(loader.Module):
             return await utils.answer(m, self.strings("noargs", m))
         await self._download_audio(m, url, "320", reply=await m.get_reply_message())
 
+    @loader.owner
     async def ytdlcmd(self, m: Message):
         """.ytdl <link / reply_to_link> - probe formats and pick via inline buttons"""
         url = await self._resolve_url(m, is_watcher=False)
@@ -682,8 +694,8 @@ class YtDlMod(loader.Module):
 
         try:
             with open(path, "rb") as f:
-                await utils.answer(
-                    m,
+                await self.ctx.client.send_file(
+                    utils.get_chat_id(m),
                     f,
                     supports_streaming=True,
                     reply_to=reply.id if reply else None,
@@ -695,6 +707,9 @@ class YtDlMod(loader.Module):
                         ),
                     ),
                 )
+            # Status placeholder is no longer relevant — the file replaces it.
+            with contextlib.suppress(Exception):
+                await m.delete()
         finally:
             with contextlib.suppress(OSError):
                 os.remove(path)
@@ -715,8 +730,8 @@ class YtDlMod(loader.Module):
         downloads = rip_data.get("requested_downloads") or [{}]
         try:
             with open(path, "rb") as f:
-                await utils.answer(
-                    m,
+                await self.ctx.client.send_file(
+                    utils.get_chat_id(m),
                     f,
                     reply_to=reply.id if reply else None,
                     supports_streaming=True,
@@ -728,6 +743,8 @@ class YtDlMod(loader.Module):
                         ),
                     ),
                 )
+            with contextlib.suppress(Exception):
+                await m.delete()
         finally:
             with contextlib.suppress(OSError):
                 os.remove(path)
