@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "friendly-telegram"
-version = "4.1.3"
+version = "4.1.4"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
