@@ -241,8 +241,11 @@ class LoaderMod(loader.Module):
         if preset is None or preset == "none":
             preset = "minimal"
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.get(self.config["MODULES_REPO"] + "/" + preset + ".txt")
+        # Strip trailing slash so we don't build ``…/main//preset.txt`` and
+        # take a needless 307 redirect on every preset fetch.
+        repo = self.config["MODULES_REPO"].rstrip("/")
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            r = await client.get(repo + "/" + preset + ".txt")
         r.raise_for_status()
         return set(filter(lambda x: x, r.text.split("\n")))
 
@@ -253,7 +256,7 @@ class LoaderMod(loader.Module):
             else:
                 url = self.config["MODULES_REPO"] + module_name + ".py"
 
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
                 r = await client.get(url)
 
             if r.status_code == 404:
@@ -581,7 +584,7 @@ class LoaderMod(loader.Module):
             await utils.answer(message, self.strings("args_incorrect", message))
 
     async def load_repo(self, git_api):
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             req = await client.get(git_api)
 
         if req.status_code != 200:

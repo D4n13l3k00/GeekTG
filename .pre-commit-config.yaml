@@ -33,3 +33,14 @@ repos:
         # where speed matters; run with ``pre-commit run --hook-stage manual
         # pytest`` or via CI when needed.
         stages: [pre-commit]
+
+      - id: block-logs
+        name: block log files from being committed
+        entry: 'bash -c ''echo "refusing to commit log files: $@" >&2; exit 1'' --'
+        language: system
+        # Match anything that smells like a runtime/debug log dump. The
+        # gitignore covers the common cases, but a contributor can still
+        # ``git add -f`` past it — this is the seatbelt.
+        files: '(\.log$|^geektg-logs|/geektg-logs)'
+        pass_filenames: true
+

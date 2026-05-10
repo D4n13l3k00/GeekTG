@@ -255,7 +255,7 @@ def _public_ip(timeout=2.0):
         "https://ipv4.icanhazip.com",
     ):
         try:
-            r = httpx.get(url, timeout=timeout)
+            r = httpx.get(url, timeout=timeout, follow_redirects=True)
             if r.is_success and r.text.strip():
                 return r.text.strip()
         except Exception:

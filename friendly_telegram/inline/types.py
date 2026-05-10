@@ -72,7 +72,9 @@ def _load_avatar() -> "io.BytesIO":
             logger.warning("Bundled avatar not found, downloading from GitHub")
             import httpx
 
-            _avatar_bytes = httpx.get(_AVATAR_URL, timeout=10).content
+            _avatar_bytes = httpx.get(
+                _AVATAR_URL, timeout=10, follow_redirects=True
+            ).content
     buf = io.BytesIO(_avatar_bytes)
     buf.name = "avatar.png"
     return buf
