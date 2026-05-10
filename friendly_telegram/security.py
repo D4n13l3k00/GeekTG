@@ -186,8 +186,6 @@ class SecurityManager:
         if not config:  # Either False or 0, either way we can failfast
             return False
 
-        logger.debug("Checking security match for %d", config)
-
         f_owner = config & OWNER
         f_sudo = config & SUDO
         f_support = config & SUPPORT

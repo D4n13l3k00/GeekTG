@@ -34,8 +34,11 @@ dependencies = [
     # `import requests` — core no longer uses it.
     "requests>=2.28.0",
     "aiogram>=3.13,<4",
-    "psutil>=5.9",
     "yt-dlp>=2025.1",
+    # psutil source build fails on Termux (Android) — keep it as a soft
+    # runtime dep; the only consumer (web/status.py) probes for it via
+    # ``_try_psutil()`` and degrades to "stats unavailable" when missing.
+    'psutil>=5.9; sys_platform != "android"',
 ]
 
 # Heavy media-processing libraries that many third-party modules pull in
