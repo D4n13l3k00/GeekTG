@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "friendly-telegram"
-version = "4.1.3"
+version = "4.1.4"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
@@ -39,6 +39,7 @@ dependencies = [
     # runtime dep; the only consumer (web/status.py) probes for it via
     # ``_try_psutil()`` and degrades to "stats unavailable" when missing.
     'psutil>=5.9; sys_platform != "android"',
+    "audioop-lts>=0.2.1; python_version>='3.13'",
 ]
 
 # Heavy media-processing libraries that many third-party modules pull in
