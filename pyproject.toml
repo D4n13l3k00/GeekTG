@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "friendly-telegram"
-version = "4.1.1"
+version = "4.1.2"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
@@ -54,6 +54,7 @@ media = [
     "wand",
     "moviepy",
     "numpy",
+    "audioop-lts; python_version>='3.13'",
 ]
 dev = [
     "pytest>=8",
