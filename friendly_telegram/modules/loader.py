@@ -28,7 +28,7 @@ import uuid
 from importlib.abc import SourceLoader
 from importlib.machinery import ModuleSpec
 
-import requests
+import httpx
 import telethon
 from telethon.tl.types import Message
 
@@ -73,30 +73,26 @@ class StringLoader(
 
 
 def unescape_percent(text):
+    # Repo filenames encode "." as "%d" so they can live as legal Python module
+    # names (the dot would otherwise look like a package separator). Anything
+    # else passes through unchanged. ``%%`` collapses to ``%``.
+    out = []
     i = 0
-    ln = len(text)
-    is_handling_percent = False
-    out = ""
-
-    while i < ln:
-        char = text[i]
-
-        if char == "%" and not is_handling_percent:
-            is_handling_percent = True
-            i += 1
-            continue
-
-        if char == "d" and is_handling_percent:
-            out += "."
-            is_handling_percent = False
-            i += 1
-            continue
-
-        out += char
-        is_handling_percent = False
+    while i < len(text):
+        ch = text[i]
+        if ch == "%" and i + 1 < len(text):
+            nxt = text[i + 1]
+            if nxt == "d":
+                out.append(".")
+                i += 2
+                continue
+            if nxt == "%":
+                out.append("%")
+                i += 2
+                continue
+        out.append(ch)
         i += 1
-
-    return out
+    return "".join(out)
 
 
 def get_git_api(url):
@@ -187,11 +183,13 @@ class LoaderMod(loader.Module):
             args = args[0] if urllib.parse.urlparse(args[0]).netloc else args[0].lower()
 
             if await self.download_and_install(args, message):
-                self._db.set(
+                self.ctx.db.set(
                     __name__,
                     "loaded_modules",
                     list(
-                        set(self._db.get(__name__, "loaded_modules", [])).union([args])
+                        set(self.ctx.db.get(__name__, "loaded_modules", [])).union(
+                            [args]
+                        )
                     ),
                 )
         else:
@@ -217,33 +215,37 @@ class LoaderMod(loader.Module):
 
         try:
             await self.get_repo_list(args[0])
-        except requests.exceptions.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 await utils.answer(message, self.strings("no_preset", message))
                 return
 
             raise
 
-        self._db.set(__name__, "chosen_preset", args[0])
-        self._db.set(__name__, "loaded_modules", [])
-        self._db.set(__name__, "unloaded_modules", [])
+        self.ctx.db.set(__name__, "chosen_preset", args[0])
+        self.ctx.db.set(__name__, "loaded_modules", [])
+        self.ctx.db.set(__name__, "unloaded_modules", [])
 
         await utils.answer(message, self.strings("preset_loaded", message))
         await self.allmodules.commands["restart"](await message.reply("_"))
 
     async def _get_modules_to_load(self):
-        todo = await self.get_repo_list(self._db.get(__name__, "chosen_preset", None))
-        todo = todo.difference(self._db.get(__name__, "unloaded_modules", []))
-        todo.update(self._db.get(__name__, "loaded_modules", []))
+        todo = await self.get_repo_list(
+            self.ctx.db.get(__name__, "chosen_preset", None)
+        )
+        todo = todo.difference(self.ctx.db.get(__name__, "unloaded_modules", []))
+        todo.update(self.ctx.db.get(__name__, "loaded_modules", []))
         return todo
 
     async def get_repo_list(self, preset=None):
         if preset is None or preset == "none":
             preset = "minimal"
 
-        r = await utils.run_sync(
-            requests.get, self.config["MODULES_REPO"] + "/" + preset + ".txt"
-        )
+        # Strip trailing slash so we don't build ``…/main//preset.txt`` and
+        # take a needless 307 redirect on every preset fetch.
+        repo = self.config["MODULES_REPO"].rstrip("/")
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            r = await client.get(repo + "/" + preset + ".txt")
         r.raise_for_status()
         return set(filter(lambda x: x, r.text.split("\n")))
 
@@ -254,7 +256,8 @@ class LoaderMod(loader.Module):
             else:
                 url = self.config["MODULES_REPO"] + module_name + ".py"
 
-            r = await utils.run_sync(requests.get, url)
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                r = await client.get(url)
 
             if r.status_code == 404:
                 if message is not None:
@@ -267,7 +270,10 @@ class LoaderMod(loader.Module):
                 r.content.decode("utf-8"), message, module_name, url
             )
         except Exception:
-            logger.exception(f"Failed to load {module_name}")
+            logger.exception("Failed to load %s", module_name)
+            if message is not None:
+                await utils.answer(message, self.strings("load_failed", message))
+            return False
 
     @loader.owner
     async def loadmodcmd(self, message: Message) -> None:
@@ -398,8 +404,10 @@ class LoaderMod(loader.Module):
                         message, f"🚫 <b>{utils.escape_html(str(e))}</b>"
                     )
                 return
-        except BaseException as e:
-            logger.exception(f"Loading external module failed due to {e}")
+        except Exception as e:
+            # Narrowed from BaseException so KeyboardInterrupt / SystemExit can
+            # still propagate cleanly.
+            logger.exception("Loading external module failed: %s", e)
 
             if message is not None:
                 await utils.answer(message, self.strings("load_failed", message))
@@ -418,9 +426,9 @@ class LoaderMod(loader.Module):
 
         try:
             try:
-                self.allmodules.send_config_one(instance, self._db, self.babel)
+                self.allmodules.send_config_one(instance, self.ctx.db, self.babel)
                 await self.allmodules.send_ready_one(
-                    instance, self._client, self._db, self.allclients
+                    instance, self.ctx.client, self.ctx.db, self.allclients
                 )
             except loader.LoadError as e:
                 if message:
@@ -444,7 +452,7 @@ class LoaderMod(loader.Module):
 
             modhelp = ""
             prefix = utils.escape_html(
-                (self._db.get(main.__name__, "command_prefix", False) or ".")
+                (self.ctx.db.get(main.__name__, "command_prefix", False) or ".")
             )
 
             if instance.__doc__:
@@ -537,11 +545,11 @@ class LoaderMod(loader.Module):
             await utils.answer(message, self.strings("loading", message))
 
             if await self.load_repo(git_api):
-                self._db.set(
+                self.ctx.db.set(
                     __name__,
                     "loaded_repositories",
                     list(
-                        set(self._db.get(__name__, "loaded_repositories", [])).union(
+                        set(self.ctx.db.get(__name__, "loaded_repositories", [])).union(
                             [repo_url]
                         )
                     ),
@@ -560,7 +568,7 @@ class LoaderMod(loader.Module):
 
         if len(args) == 1:
             repoUrl = args[0]
-            repos = set(self._db.get(__name__, "loaded_repositories", []))
+            repos = set(self.ctx.db.get(__name__, "loaded_repositories", []))
 
             try:
                 repos.remove(repoUrl)
@@ -569,14 +577,15 @@ class LoaderMod(loader.Module):
                     message, self.strings("repo_not_unloaded", message)
                 )
 
-            self._db.set(__name__, "loaded_repositories", list(repos))
+            self.ctx.db.set(__name__, "loaded_repositories", list(repos))
 
             await utils.answer(message, self.strings("repo_unloaded", message))
         else:
             await utils.answer(message, self.strings("args_incorrect", message))
 
     async def load_repo(self, git_api):
-        req = await utils.run_sync(requests.get, git_api)
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            req = await client.get(git_api)
 
         if req.status_code != 200:
             return False
@@ -618,26 +627,60 @@ class LoaderMod(loader.Module):
                 unescape_percent(mod[len("friendly-telegram.modules.") :])
             ]
 
-        it = set(self._db.get(__name__, "loaded_modules", [])).difference(
-            without_prefix
-        )
-        self._db.set(__name__, "loaded_modules", list(it))
-        it = set(self._db.get(__name__, "unloaded_modules", [])).union(without_prefix)
-        self._db.set(__name__, "unloaded_modules", list(it))
+        self._move_modules(loaded_to_unloaded=without_prefix)
 
         await utils.answer(
             message, self.strings("unloaded" if worked else "not_unloaded", message)
         )
 
+    def _move_modules(
+        self, *, loaded_to_unloaded=None, unloaded_to_loaded=None
+    ) -> None:
+        """Keep loaded/unloaded module name lists in sync with a single helper."""
+        if loaded_to_unloaded:
+            self.ctx.db.set(
+                __name__,
+                "loaded_modules",
+                list(
+                    set(self.ctx.db.get(__name__, "loaded_modules", []))
+                    - set(loaded_to_unloaded)
+                ),
+            )
+            self.ctx.db.set(
+                __name__,
+                "unloaded_modules",
+                list(
+                    set(self.ctx.db.get(__name__, "unloaded_modules", []))
+                    | set(loaded_to_unloaded)
+                ),
+            )
+        if unloaded_to_loaded:
+            self.ctx.db.set(
+                __name__,
+                "unloaded_modules",
+                list(
+                    set(self.ctx.db.get(__name__, "unloaded_modules", []))
+                    - set(unloaded_to_loaded)
+                ),
+            )
+            self.ctx.db.set(
+                __name__,
+                "loaded_modules",
+                list(
+                    set(self.ctx.db.get(__name__, "loaded_modules", []))
+                    | set(unloaded_to_loaded)
+                ),
+            )
+
     @loader.owner
     async def clearmodulescmd(self, message: Message) -> None:
         """Delete all installed modules"""
-        self._db.set("friendly-telegram.modules.loader", "loaded_modules", [])
-        self._db.set("friendly-telegram.modules.loader", "unloaded_modules", [])
+        self.ctx.db.set("friendly-telegram.modules.loader", "loaded_modules", [])
+        self.ctx.db.set("friendly-telegram.modules.loader", "unloaded_modules", [])
 
         await utils.answer(message, self.strings("all_modules_deleted", message))
 
-        self._db.set(__name__, "chosen_preset", "none")
+        self.ctx.db.set(__name__, "chosen_preset", "none")
 
         await self.allmodules.commands["restart"](await message.reply("_"))
 
@@ -646,13 +689,11 @@ class LoaderMod(loader.Module):
 
         await asyncio.gather(*[self.download_and_install(mod) for mod in todo])
 
-        repos = set(self._db.get(__name__, "loaded_repositories", []))
+        repos = set(self.ctx.db.get(__name__, "loaded_repositories", []))
 
         await asyncio.gather(*[self.load_repo(get_git_api(url)) for url in repos])
 
     async def client_ready(self, client, db):
-        self._db = db
-        self._client = client
         await self._update_modules()
 
 

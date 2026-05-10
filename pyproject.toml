@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "friendly-telegram"
-version = "4.1.0"
+version = "4.1.1"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
@@ -29,9 +29,16 @@ dependencies = [
     "aiohttp_jinja2>=1.5",
     "aiohttp>=3.10",
     "Jinja2>=3.1.2",
+    "httpx>=0.27",
+    # kept for compatibility with third-party custom modules that still
+    # `import requests` — core no longer uses it.
     "requests>=2.28.0",
     "aiogram>=3.13,<4",
-    "psutil>=5.9",
+    "yt-dlp>=2025.1",
+    # psutil source build fails on Termux (Android) — keep it as a soft
+    # runtime dep; the only consumer (web/status.py) probes for it via
+    # ``_try_psutil()`` and degrades to "stats unavailable" when missing.
+    'psutil>=5.9; sys_platform != "android"',
 ]
 
 # Heavy media-processing libraries that many third-party modules pull in

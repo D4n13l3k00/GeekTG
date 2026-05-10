@@ -29,6 +29,7 @@ import os
 import sys
 
 from . import inline, security, utils
+from .api import ModuleContext
 from .translations.dynamic import Strings
 
 
@@ -171,11 +172,23 @@ class Module:
 
     """There is no help for this module"""
 
+    #: Populated by the framework before :meth:`client_ready` runs. Modules
+    #: that opt into the new API can read ``self.ctx.client`` / ``.db`` /
+    #: ``.inline`` / ``.modules`` instead of stashing them in ``client_ready``.
+    #: Type is ``ModuleContext | None`` because the attribute exists on the
+    #: class as a sentinel before the framework has populated it.
+    ctx: "ModuleContext | None" = None
+
     def config_complete(self):
         """Will be called when module.config is populated"""
 
     async def client_ready(self, client, db):
-        """Will be called after client is ready (after config_loaded)"""
+        """Will be called after client is ready (after config_loaded).
+
+        New code should prefer overriding nothing here and reading from
+        ``self.ctx`` directly — the framework guarantees ``ctx`` is set
+        before this method is invoked.
+        """
 
     async def on_unload(self):
         """Will be called after unloading / reloading module"""
@@ -267,8 +280,6 @@ class Modules:
                     )
                 ]
 
-        logging.debug(mods)
-
         for mod in mods:
             try:
                 # Use the historical package name as prefix so cloud-DB keys
@@ -277,7 +288,6 @@ class Modules:
                 module_name = (
                     f"friendly-telegram.{MODULES_NAME}.{os.path.basename(mod)[:-3]}"
                 )
-                logging.debug(module_name)
                 spec = importlib.util.spec_from_file_location(module_name, mod)
                 self.register_module(spec, module_name)
             except BaseException as e:
@@ -465,6 +475,19 @@ class Modules:
     async def send_ready_one(self, mod, client, db, allclients):
         mod.allclients = allclients
         mod.inline = self.inline
+        # New unified DI surface — see friendly_telegram.api.ModuleContext.
+        # Set *before* client_ready so modules migrating off the legacy
+        # ``self._client = client; self._db = db`` boilerplate can read
+        # ``self.ctx`` from inside their setup/client_ready.
+        mod.ctx = ModuleContext(
+            client=client,
+            db=db,
+            inline=self.inline,
+            modules=self,
+            allclients=allclients,
+            log=self.log,
+            origin=getattr(mod, "__origin__", "<file>"),
+        )
 
         try:
             await mod.client_ready(client, db)

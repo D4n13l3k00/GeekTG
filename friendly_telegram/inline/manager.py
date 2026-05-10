@@ -474,30 +474,6 @@ class InlineManager:
         self._dp.chosen_inline_result.register(self._chosen_inline_handler)
         self._dp.message.register(self._message_handler)
 
-        # Trace every incoming update before aiogram routes it to an
-        # observer. WARNING level so it surfaces under the default log
-        # config (root handler is at WARNING by default — INFO would be
-        # invisible while debugging "buttons don't work").
-        @self._dp.update.outer_middleware()
-        async def _trace_update(handler, event, data):
-            present = next(
-                (
-                    k
-                    for k in (
-                        "callback_query",
-                        "inline_query",
-                        "chosen_inline_result",
-                        "message",
-                        "edited_message",
-                        "channel_post",
-                    )
-                    if getattr(event, k, None) is not None
-                ),
-                "<unknown>",
-            )
-            logger.warning("[inline-diag] update %s: %s", event.update_id, present)
-            return await handler(event, data)
-
         # ``dp.errors`` in v3 catches *handler* exceptions, not polling-loop
         # errors. Use it only for the unauth case where we want to stop the
         # bot cleanly. Conflict / network errors are handled by aiogram's own
@@ -529,7 +505,6 @@ class InlineManager:
         # Force-resolve from our registered observers and pass it through —
         # this overwrites the server-side memory on the first call.
         allowed = self._dp.resolve_used_update_types()
-        logger.warning("[inline-diag] polling start; allowed_updates=%s", allowed)
 
         # handle_signals=False — userbot's web logout flow installs its own
         # SIGTERM handler via os.kill(); we don't want aiogram to swallow it.
@@ -642,12 +617,13 @@ class InlineManager:
                             f"properly. {button}"
                         )
                 except KeyError:
+                    # Drop the malformed button rather than the whole markup —
+                    # ``return False`` here used to feed a bool back to
+                    # InlineQueryResult.reply_markup, which pydantic silently
+                    # coerces, leaving the form unbutton'd with no diagnostic.
                     logger.exception(
-                        "Error while forming markup! Probably, you "
-                        "passed wrong type combination for button. "
-                        "Contact developer of module."
+                        "Dropping malformed button %r from form markup", button
                     )
-                    return False
 
             rows.append(line)
 
@@ -655,11 +631,6 @@ class InlineManager:
 
     async def _inline_handler(self, inline_query: InlineQuery) -> None:
         """Inline query handler (forms' calls)"""
-        logger.warning(
-            "[inline-diag] inline_query q=%r from=%s",
-            inline_query.query,
-            inline_query.from_user.id,
-        )
         # Retrieve query from passed object
         query = inline_query.query
 
@@ -773,7 +744,7 @@ class InlineManager:
                                 ),
                             )
                         ],
-                        cache_time=60,
+                        cache_time=0,
                     )
                     return
 
@@ -820,33 +791,36 @@ class InlineManager:
         if query not in self._forms:
             return
 
-        # Otherwise, answer it with templated form
+        form_state = self._forms[query]
         await inline_query.answer(
             (
                 [
                     InlineQueryResultPhoto(
                         id=rand(20),
                         title="GeekTG",
-                        photo_url=self._forms[query]["photo"],
-                        caption=self._forms[query]["text"],
+                        photo_url=form_state["photo"],
+                        caption=form_state["text"],
                         reply_markup=self._generate_markup(query),
-                        thumbnail_url=self._forms[query]["photo"],
+                        thumbnail_url=form_state["photo"],
                     )
                 ]
-                if self._forms[query]["photo"]
+                if form_state["photo"]
                 else [
                     InlineQueryResultArticle(
                         id=rand(20),
                         title="GeekTG",
                         input_message_content=InputTextMessageContent(
-                            message_text=self._forms[query]["text"],
+                            message_text=form_state["text"],
                             link_preview_options=LinkPreviewOptions(is_disabled=True),
                         ),
                         reply_markup=self._generate_markup(query),
                     )
                 ]
             ),
-            cache_time=60,
+            # form_uid is unique per form() call, so caching can never produce
+            # a legitimate hit — but it can poison a retry by letting TG serve
+            # a stale failed answer.
+            cache_time=0,
         )
 
     async def _callback_query_handler(self, query: CallbackQuery) -> None:
@@ -857,12 +831,6 @@ class InlineManager:
         data — leaving the legacy kwarg in here invited a foreign middleware
         to inject something and crash dispatch silently. Dropped.
         """
-        logger.warning(
-            "[inline-diag] callback_query data=%r from=%s",
-            query.data,
-            query.from_user.id,
-        )
-
         # First, dispatch all registered callback handlers
         for mod in self._allmodules.modules:
             if (
@@ -1115,6 +1083,13 @@ class InlineManager:
                 ),
             )
         except Exception:
+            # The original code swallowed everything silently while telling the
+            # user to "check logs" — surface the cause so the next regression
+            # actually leaves a trail.
+            logger.exception("inline.form() failed for uid=%s", form_uid)
+            m = None
+
+        if m is None:
             msg = (
                 "🚫 <b>A problem occurred with inline bot "
                 "while processing query. Check logs for "
@@ -1250,6 +1225,8 @@ class InlineManager:
                 ),
             )
         except Exception:
+            # Mirror form()'s diagnostics so gallery() failures aren't silent.
+            logger.exception("inline.gallery() failed for gallery_uid=%s", gallery_uid)
             msg = (
                 "🚫 <b>A problem occurred with inline bot "
                 "while processing query. Check logs for "

@@ -17,28 +17,17 @@ from telethon.utils import get_display_name
 
 from .. import loader, main, security, utils
 from ..inline.types import InlineCall
-from ..security import (
-    DEFAULT_PERMISSIONS,
-    GROUP_ADMIN,
-    GROUP_ADMIN_ADD_ADMINS,
-    GROUP_ADMIN_BAN_USERS,
-    GROUP_ADMIN_CHANGE_INFO,
-    GROUP_ADMIN_DELETE_MESSAGES,
-    GROUP_ADMIN_INVITE_USERS,
-    GROUP_ADMIN_PIN_MESSAGES,
-    GROUP_MEMBER,
-    GROUP_OWNER,
-    OWNER,
-    PM,
-    SUDO,
-    SUPPORT,
-)
+from ..security import DEFAULT_PERMISSIONS
 
 logger = logging.getLogger(__name__)
 
 
 def chunks(lst: list, n: int) -> List[list]:
     return [lst[i : i + n] for i in range(0, len(lst), n)]
+
+
+def _flip(mask: int, bit: int, on: bool) -> int:
+    return (mask | bit) if on else (mask & ~bit)
 
 
 @loader.tds
@@ -88,44 +77,75 @@ class GeekSecurityMod(loader.Module):
         "cancel": "🚫 Cancel",
         "confirm": "👑 Confirm",
         "self": "🚫 <b>You can't promote/demote yourself!</b>",
-        "restart": "<i>🔄 Restart may be required to commit changes</i>",
     }
 
-    def get(self, *args) -> dict:
-        return self._db.get(self.strings["name"], *args)
-
-    def set(self, *args) -> None:
-        return self._db.set(self.strings["name"], *args)
-
     async def client_ready(self, client, db) -> None:
-        self._db = db
-        self._client = client
         self.prefix = utils.escape_html(
-            (self._db.get(main.__name__, "command_prefix", False) or ".")
+            self.ctx.db.get(main.__name__, "command_prefix", False) or "."
+        )
+        self._me = (await client.get_me()).id
+
+    # ---------------------------------------------------------------- helpers
+
+    def _cmd_key(self, cmd: FunctionType) -> str:
+        return f"{cmd.__module__}.{cmd.__name__}"
+
+    def _perms_map(self, perms: int) -> dict:
+        """Lowercased label → bool, in BITMAP order."""
+        return {
+            name.lower(): bool(perms & bit) for name, bit in security.BITMAP.items()
+        }
+
+    def _current_cmd_mask(self, cmd: FunctionType) -> int:
+        return self.ctx.db.get(security.__name__, "masks", {}).get(
+            self._cmd_key(cmd),
+            getattr(
+                cmd,
+                "security",
+                self.ctx.client.dispatcher.security._default,  # noqa: SLF001
+            ),
         )
 
-        self._me = (await client.get_me()).id
-        self._is_geek = hasattr(self, "inline")
+    def _current_global_mask(self) -> int:
+        return self.ctx.db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
+
+    def _perm_buttons(self, mask: int, callback, prefix_args: tuple) -> list:
+        """Build the permission toggle keyboard for either single-cmd or global."""
+        perms = self._perms_map(mask)
+        buttons = [
+            {
+                "text": f"{'✅' if level else '🚫'} {self.strings[group]}",
+                "callback": callback,
+                "args": (*prefix_args, group, not level),
+            }
+            for group, level in perms.items()
+        ]
+        return chunks(buttons, 2) + [
+            [{"text": self.strings("close_menu"), "callback": self.inline_close}]
+        ]
+
+    def _build_markup(self, command: FunctionType) -> List[List[dict]]:
+        return self._perm_buttons(
+            self._current_cmd_mask(command),
+            self.inline__switch_perm,
+            (command.__name__[:-3],),
+        )
+
+    def _build_markup_global(self) -> List[List[dict]]:
+        return self._perm_buttons(
+            self._current_global_mask(), self.inline__switch_perm_bm, ()
+        )
+
+    # ------------------------------------------------------------ inline cbs
 
     async def inline__switch_perm(
         self, call: InlineCall, command: str, group: str, level: bool
     ) -> None:
         cmd = self.allmodules.commands[command]
-        mask = self._db.get(security.__name__, "masks", {}).get(
-            f"{cmd.__module__}.{cmd.__name__}",
-            getattr(cmd, "security", security.DEFAULT_PERMISSIONS),
-        )
-
         bit = security.BITMAP[group.upper()]
-
-        if level:
-            mask |= bit
-        else:
-            mask &= ~bit
-
-        masks = self._db.get(security.__name__, "masks", {})
-        masks[f"{cmd.__module__}.{cmd.__name__}"] = mask
-        self._db.set(security.__name__, "masks", masks)
+        masks = self.ctx.db.get(security.__name__, "masks", {})
+        masks[self._cmd_key(cmd)] = _flip(self._current_cmd_mask(cmd), bit, level)
+        self.ctx.db.set(security.__name__, "masks", masks)
 
         await call.answer("Security value set!")
         await call.edit(
@@ -136,15 +156,9 @@ class GeekSecurityMod(loader.Module):
     async def inline__switch_perm_bm(
         self, call: InlineCall, group: str, level: bool
     ) -> None:
-        mask = self._db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
         bit = security.BITMAP[group.upper()]
-
-        if level:
-            mask |= bit
-        else:
-            mask &= ~bit
-
-        self._db.set(security.__name__, "bounding_mask", mask)
+        new = _flip(self._current_global_mask(), bit, level)
+        self.ctx.db.set(security.__name__, "bounding_mask", new)
 
         await call.answer("Bounding mask value set!")
         await call.edit(
@@ -155,68 +169,7 @@ class GeekSecurityMod(loader.Module):
     async def inline_close(call: InlineCall) -> None:
         await call.delete()
 
-    def _build_markup(self, command: FunctionType) -> List[List[dict]]:
-        perms = self._get_current_perms(command)
-        buttons = [
-            {
-                "text": f"{'✅' if level else '🚫'} {self.strings[group]}",
-                "callback": self.inline__switch_perm,
-                "args": (command.__name__[:-3], group, not level),
-            }
-            for group, level in perms.items()
-        ]
-
-        return chunks(buttons, 2) + [
-            [{"text": self.strings("close_menu"), "callback": self.inline_close}]
-        ]
-
-    def _build_markup_global(self) -> List[List[dict]]:
-        perms = self._get_current_bm()
-        buttons = [
-            {
-                "text": f"{'✅' if level else '🚫'} {self.strings[group]}",
-                "callback": self.inline__switch_perm_bm,
-                "args": (group, not level),
-            }
-            for group, level in perms.items()
-        ]
-
-        return chunks(buttons, 2) + [
-            [{"text": self.strings("close_menu"), "callback": self.inline_close}]
-        ]
-
-    def _get_current_bm(self) -> dict:
-        return self._perms_map(
-            self._db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
-        )
-
-    @staticmethod
-    def _perms_map(perms: int) -> dict:
-        return {
-            "owner": bool(perms & OWNER),
-            "sudo": bool(perms & SUDO),
-            "support": bool(perms & SUPPORT),
-            "group_owner": bool(perms & GROUP_OWNER),
-            "group_admin_add_admins": bool(perms & GROUP_ADMIN_ADD_ADMINS),
-            "group_admin_change_info": bool(perms & GROUP_ADMIN_CHANGE_INFO),
-            "group_admin_ban_users": bool(perms & GROUP_ADMIN_BAN_USERS),
-            "group_admin_delete_messages": bool(perms & GROUP_ADMIN_DELETE_MESSAGES),
-            "group_admin_pin_messages": bool(perms & GROUP_ADMIN_PIN_MESSAGES),
-            "group_admin_invite_users": bool(perms & GROUP_ADMIN_INVITE_USERS),
-            "group_admin": bool(perms & GROUP_ADMIN),
-            "group_member": bool(perms & GROUP_MEMBER),
-            "pm": bool(perms & PM),
-        }
-
-    def _get_current_perms(self, command: FunctionType) -> dict:
-        config = self._db.get(security.__name__, "masks", {}).get(
-            f"{command.__module__}.{command.__name__}",
-            getattr(
-                command, "security", self._client.dispatcher.security._default
-            ),  # skipcq: PYL-W0212
-        )
-
-        return self._perms_map(config)
+    # --------------------------------------------------------------- command
 
     async def securitycmd(self, message: Message) -> None:
         """[command] - Configure command's security settings"""
@@ -235,7 +188,6 @@ class GeekSecurityMod(loader.Module):
             return
 
         cmd = self.allmodules.commands[args]
-
         await self.inline.form(
             self.strings("permissions").format(self.prefix, args),
             reply_markup=self._build_markup(cmd),
@@ -243,41 +195,57 @@ class GeekSecurityMod(loader.Module):
             ttl=5 * 60,
         )
 
-    async def _resolve_user(self, message: Message) -> None:
+    # ------------------------------------------------------------ user mgmt
+
+    async def _resolve_user(self, message: Message):
         reply = await message.get_reply_message()
         args = utils.get_args_raw(message)
 
         if not args and not reply:
             await utils.answer(message, self.strings("no_user"))
-            return
+            return None
 
         user = None
-
         if args:
             try:
                 if str(args).isdigit():
                     args = int(args)
-
-                user = await self._client.get_entity(args)
+                user = await self.ctx.client.get_entity(args)
             except Exception:
-                pass
+                logger.debug("explicit-arg entity lookup failed", exc_info=True)
 
         if user is None:
-            user = await self._client.get_entity(reply.sender_id)
+            if reply is None:
+                await utils.answer(message, self.strings("not_a_user"))
+                return None
+            try:
+                user = await self.ctx.client.get_entity(reply.sender_id)
+            except Exception:
+                logger.debug("reply entity lookup failed", exc_info=True)
+                await utils.answer(message, self.strings("not_a_user"))
+                return None
 
         if not isinstance(user, (User, PeerUser)):
             await utils.answer(message, self.strings("not_a_user"))
-            return
+            return None
 
         if user.id == self._me:
             await utils.answer(message, self.strings("self"))
-            return
+            return None
 
         return user
 
+    def _group_add(self, group: str, user_id: int) -> None:
+        ids = set(self.ctx.db.get(security.__name__, group, [])) | {user_id}
+        self.ctx.db.set(security.__name__, group, list(ids))
+
+    def _group_remove(self, group: str, user_id: int) -> None:
+        ids = set(self.ctx.db.get(security.__name__, group, [])) - {user_id}
+        self.ctx.db.set(security.__name__, group, list(ids))
+
     async def _add_to_group(
         self,
-        message: Union[Message, InlineCall],  # noqa: F821
+        message: Union[Message, InlineCall],
         group: str,
         confirmed: bool = False,
         user: int = None,
@@ -288,9 +256,9 @@ class GeekSecurityMod(loader.Module):
                 return
 
         if isinstance(user, int):
-            user = await self._client.get_entity(user)
+            user = await self.ctx.client.get_entity(user)
 
-        if self._is_geek and not confirmed:
+        if not confirmed:
             await self.inline.form(
                 self.strings("warning").format(
                     user.id, utils.escape_html(get_display_name(user)), group
@@ -313,75 +281,48 @@ class GeekSecurityMod(loader.Module):
             )
             return
 
-        self._db.set(
-            security.__name__,
-            group,
-            list(set(self._db.get(security.__name__, group, []) + [user.id])),
+        self._group_add(group, user.id)
+        text = self.strings(f"{group}_added").format(
+            user.id, utils.escape_html(get_display_name(user))
         )
-
-        m = self.strings(f"{group}_added").format(
-            user.id,
-            utils.escape_html(get_display_name(user)),
-        )
-
-        if not self._is_geek:
-            m += f"\n\n{self.strings('restart')}"
-
         if isinstance(message, Message):
-            await utils.answer(
-                message,
-                m,
-            )
+            await utils.answer(message, text)
         else:
-            await message.edit(m)
+            await message.edit(text)
 
     async def _remove_from_group(self, message: Message, group: str) -> None:
         user = await self._resolve_user(message)
         if not user:
             return
-
-        self._db.set(
-            security.__name__,
-            group,
-            list(set(self._db.get(security.__name__, group, [])) - {user.id}),
+        self._group_remove(group, user.id)
+        await utils.answer(
+            message,
+            self.strings(f"{group}_removed").format(
+                user.id, utils.escape_html(get_display_name(user))
+            ),
         )
-
-        m = self.strings(f"{group}_removed").format(
-            user.id,
-            utils.escape_html(get_display_name(user)),
-        )
-
-        if not self._is_geek:
-            m += f"\n\n{self.strings('restart')}"
-
-        await utils.answer(message, m)
 
     async def _list_group(self, message: Message, group: str) -> None:
-        _resolved_users = []
-        for user in self._db.get(security.__name__, group, []) + (
-            [self._me] if group == "owner" else []
-        ):
-            try:
-                _resolved_users += [await self._client.get_entity(user)]
-            except Exception:
-                pass
+        ids = self.ctx.db.get(security.__name__, group, [])
+        if group == "owner":
+            ids = ids + [self._me]
 
-        if _resolved_users:
-            await utils.answer(
-                message,
-                self.strings(f"{group}_list").format(
-                    "\n".join(
-                        [
-                            self.strings("li").format(
-                                i.id, utils.escape_html(get_display_name(i))
-                            )
-                            for i in _resolved_users
-                        ]
-                    )
-                ),
-            )
-        else:
+        resolved = []
+        for uid in ids:
+            try:
+                resolved.append(await self.ctx.client.get_entity(uid))
+            except Exception:
+                logger.debug("group %s: entity %s missing", group, uid, exc_info=True)
+
+        if not resolved:
             await utils.answer(message, self.strings(f"no_{group}"))
+            return
+
+        body = "\n".join(
+            self.strings("li").format(u.id, utils.escape_html(get_display_name(u)))
+            for u in resolved
+        )
+        await utils.answer(message, self.strings(f"{group}_list").format(body))
 
     async def sudoaddcmd(self, message: Message) -> None:
         """<user> - Add user to `sudo`"""

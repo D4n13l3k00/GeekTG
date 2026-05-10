@@ -78,6 +78,29 @@ class MemoryHandler(logging.Handler):
 _FMT = "%(asctime)s %(levelname).1s %(name)s: %(message)s"
 _DATEFMT = "%H:%M:%S"
 
+# Loggers that are too chatty at DEBUG/INFO to be useful on stdout but whose
+# records we still want in the MemoryHandler buffer for ``.logs DEBUG``.
+# Filtering here (on the StreamHandler) instead of via setLevel() on the
+# logger keeps the buffer full without spamming the terminal.
+_NOISY_PREFIXES = (
+    "telethon",
+    "asyncio",
+    "urllib3",
+    "git.cmd",
+    "git.util",
+)
+
+
+class _StdoutNoiseFilter(logging.Filter):
+    """Suppress sub-WARNING records from chatty libraries on stdout only."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.WARNING:
+            return True
+        return not any(
+            record.name == p or record.name.startswith(p + ".") for p in _NOISY_PREFIXES
+        )
+
 
 def init():
     """Configure logging.
@@ -88,10 +111,16 @@ def init():
     *what is happening* (web URLs, code-request status, restart hints) —
     previously this was WARNING, leaving stdout silent on success paths.
     Override per user via ``loglevel`` config in the database.
+
+    A noise filter is layered on the stdout handler so telethon / asyncio /
+    urllib3 / gitpython chatter doesn't drown the userbot's own messages.
+    The MemoryHandler buffer is unfiltered, so ``.logs DEBUG`` still shows
+    everything.
     """
     formatter = _formatter(_FMT, _DATEFMT)
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
+    handler.addFilter(_StdoutNoiseFilter())
     mem = MemoryHandler(handler, 2500)
     mem.lvl = logging.INFO
 

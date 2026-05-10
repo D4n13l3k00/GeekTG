@@ -29,6 +29,11 @@ data/
 ftg-install.log
 config.ini
 
+# Runtime / debug logs (never commit)
+*.log
+geektg-logs*.txt
+geektg-logs*
+
 # Binary media (legacy ignore from old repo layout). The bundled web
 # avatar is whitelisted explicitly.
 *.png

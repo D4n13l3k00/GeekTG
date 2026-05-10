@@ -39,15 +39,7 @@ class GeekInfoMod(loader.Module):
         ),
     }
 
-    def get(self, *args) -> dict:
-        return self._db.get(self.strings["name"], *args)
-
-    def set(self, *args) -> None:
-        return self._db.set(self.strings["name"], *args)
-
     async def client_ready(self, client, db) -> None:
-        self._db = db
-        self._client = client
         self._me = await client.get_me()
 
     def __init__(self):
@@ -59,45 +51,49 @@ class GeekInfoMod(loader.Module):
             {"text": "🤵‍♀️ Support chat", "url": "https://t.me/GeekTGChat"},
             lambda: self.strings("_custom_button_doc"),
             "photo_url",
-            "https://i.imgur.com/6FKsFcM.png",
+            "https://i.ibb.co/nMtdQXPn/maskot.jpg",
             lambda: self.strings("_photo_url_doc"),
         )
 
-    def build_message(self):
-        """
-        Build custom message
-        """
+    def _update_status(self) -> str:
+        """HTML snippet describing whether the working copy is behind origin."""
         try:
             repo = git.Repo()
             diff = repo.git.log(["HEAD..origin", "--oneline"])
-            upd = (
-                "⚠️ Update required </b><code>.update</code><b>"
-                if diff
-                else "✅ Up-to-date"
-            )
         except Exception:
-            upd = ""
+            logger.debug("git status check failed", exc_info=True)
+            return ""
+        if diff:
+            return "⚠️ <b>Update required:</b> <code>.update</code>"
+        return "✅ <b>Up-to-date</b>"
+
+    def _owner_html(self) -> str:
+        return (
+            f'<a href="tg://user?id={self._me.id}">'
+            f"{utils.escape_html(get_display_name(self._me) or '')}</a>"
+        )
+
+    def _build_html(self) -> str:
         ver, gitlink = utils.get_git_info()
+        sha = utils.escape_html((ver or "")[:8] or "Unknown")
+        return f'<a href="{utils.escape_html(gitlink or "")}">{sha}</a>'
+
+    def build_message(self) -> str:
+        """Render the .info caption using the configured (or default) template."""
+        ctx = {
+            "owner": self._owner_html(),
+            "version": utils.escape_html(utils.get_version_raw()),
+            "build": self._build_html(),
+            "upd": self._update_status(),
+            "platform": utils.get_platform_name(),
+        }
+        fmt = self.config["custom_message"] or self.strings("default_message")
         try:
-            return (
-                self.config["custom_message"]
-                if self.config["custom_message"]
-                else self.strings("default_message")
-            ).format(
-                owner=f'<a href="tg://user?id={self._me.id}">{get_display_name(self._me)}</a>',
-                version=utils.get_version_raw(),
-                build=f'<a href="{gitlink}">{ver[:8] or "Unknown"}</a>',
-                upd=upd,
-                platform=utils.get_platform_name(),
-            )
-        except KeyError:
-            return self.strings("default_message").format(
-                owner=f'<a href="tg://user?id={self._me.id}">{get_display_name(self._me)}</a>',
-                version=utils.get_version_raw(),
-                build=f'<a href="{gitlink}">{ver[:8] or "Unknown"}</a>',
-                upd=upd,
-                platform=utils.get_platform_name(),
-            )
+            return fmt.format(**ctx)
+        except (KeyError, IndexError):
+            # User-provided template referenced an unknown placeholder — fall
+            # back to the bundled default so the command keeps working.
+            return self.strings("default_message").format(**ctx)
 
     async def info_inline_handler(self, query: GeekInlineQuery) -> None:
         """
