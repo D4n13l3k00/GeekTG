@@ -7,7 +7,7 @@ import contextlib
 import functools
 import os
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from telethon.tl.types import (
     DocumentAttributeAudio,
@@ -32,49 +32,54 @@ from ..inline.types import InlineCall
 _YT_RE = re.compile(r"^(https?://)?(www\.)?(youtube\.com|youtu\.?be)/.+$")
 _DB_NAME = "YtDl"
 
-# (label, yt-dlp format selector). ``None`` = audio-only path.
-_VIDEO_QUALITIES = [
-    ("144p", "bestvideo[height<=144]+bestaudio/best[height<=144]"),
-    ("360p", "bestvideo[height<=360]+bestaudio/best[height<=360]"),
-    ("720p", "bestvideo[height<=720]+bestaudio/best[height<=720]"),
-    ("1080p", "bestvideo[height<=1080]+bestaudio/best[height<=1080]"),
-    ("2K", "bestvideo[height<=1440]+bestaudio/best[height<=1440]"),
-    ("4K", "bestvideo[height<=2160]+bestaudio/best[height<=2160]"),
-    ("Best", "bestvideo+bestaudio/best"),
+# Audio-only quick-pick presets used by the legacy .ripa command and as a
+# fallback when a site exposes no per-format audio streams.
+_AUDIO_PRESETS = [
+    ("64 kbps", "64"),
+    ("128 kbps", "128"),
+    ("192 kbps", "192"),
+    ("256 kbps", "256"),
+    ("320 kbps", "320"),
 ]
 
-# (label, mp3 bitrate kbit/s as string — accepted by FFmpegExtractAudio).
-_AUDIO_QUALITIES = [
-    ("64k", "64"),
-    ("128k", "128"),
-    ("192k", "192"),
-    ("256k", "256"),
-    ("320k", "320"),
-]
+_QUIET_OPTS = {
+    "quiet": True,
+    "no_warnings": True,
+    "logtostderr": False,
+    "noprogress": True,
+}
 
 
-def _video_opts(fmt: str = "best") -> dict:
+def _probe_opts() -> dict:
     return {
+        **_QUIET_OPTS,
+        "skip_download": True,
+        "geo_bypass": True,
+        "nocheckcertificate": True,
+    }
+
+
+def _video_opts(fmt: str) -> dict:
+    return {
+        **_QUIET_OPTS,
         "format": fmt,
         "addmetadata": True,
         "key": "FFmpegMetadata",
         "prefer_ffmpeg": True,
         "geo_bypass": True,
         "nocheckcertificate": True,
+        "merge_output_format": "mp4",
         "postprocessors": [{"key": "FFmpegVideoConvertor", "preferedformat": "mp4"}],
-        "outtmpl": "%(id)s.mp4",
-        "logtostderr": False,
-        "quiet": True,
-        "no_warnings": True,
+        "outtmpl": "%(id)s.%(ext)s",
     }
 
 
-def _audio_opts(quality: str = "320") -> dict:
+def _audio_opts(quality: str = "320", fmt_id: Optional[str] = None) -> dict:
     return {
-        "format": "bestaudio",
+        **_QUIET_OPTS,
+        "format": fmt_id or "bestaudio",
         "addmetadata": True,
         "key": "FFmpegMetadata",
-        "writethumbnail": True,
         "prefer_ffmpeg": True,
         "geo_bypass": True,
         "nocheckcertificate": True,
@@ -86,10 +91,98 @@ def _audio_opts(quality: str = "320") -> dict:
             }
         ],
         "outtmpl": "%(id)s.mp3",
-        "quiet": True,
-        "logtostderr": False,
-        "no_warnings": True,
     }
+
+
+def _human_size(n: Optional[float]) -> str:
+    if not n:
+        return ""
+    units = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    n = float(n)
+    while n >= 1024 and i < len(units) - 1:
+        n /= 1024
+        i += 1
+    return f"{n:.1f}{units[i]}"
+
+
+def _human_duration(secs: Optional[int]) -> str:
+    if not secs:
+        return ""
+    secs = int(secs)
+    h, rem = divmod(secs, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _video_label(fmt: dict) -> str:
+    """Human-friendly label for one video format dict from yt-dlp."""
+    h = fmt.get("height") or 0
+    fps = fmt.get("fps") or 0
+    ext = fmt.get("ext") or ""
+    size = _human_size(fmt.get("filesize") or fmt.get("filesize_approx"))
+    parts = [f"{h}p"] if h else []
+    if fps and fps > 30:
+        parts[-1] = f"{parts[-1]}{int(fps)}"
+    if ext:
+        parts.append(ext)
+    if size:
+        parts.append(size)
+    return " · ".join(parts) if parts else fmt.get("format_id", "?")
+
+
+def _audio_label(fmt: dict) -> str:
+    abr = fmt.get("abr") or 0
+    ext = fmt.get("ext") or ""
+    size = _human_size(fmt.get("filesize") or fmt.get("filesize_approx"))
+    parts = []
+    if abr:
+        parts.append(f"{int(abr)}k")
+    if ext:
+        parts.append(ext)
+    if size:
+        parts.append(size)
+    return " · ".join(parts) if parts else fmt.get("format_id", "?")
+
+
+def _classify_formats(info: dict) -> Tuple[List[dict], List[dict]]:
+    """Split yt-dlp ``formats`` into (video-with-audio-or-video-only, audio-only).
+
+    For video we keep only entries that have a video codec, deduped by height
+    (best filesize wins), so the picker doesn't show a wall of 50 buttons.
+    """
+    formats = info.get("formats") or []
+    video_by_h: Dict[int, dict] = {}
+    audio: List[dict] = []
+    for f in formats:
+        vcodec = f.get("vcodec") or "none"
+        acodec = f.get("acodec") or "none"
+        if vcodec != "none":
+            h = f.get("height") or 0
+            if h <= 0:
+                continue
+            cur = video_by_h.get(h)
+            if cur is None:
+                video_by_h[h] = f
+                continue
+            # Prefer the format with both audio+video (avoids the muxing path).
+            cur_has_a = (cur.get("acodec") or "none") != "none"
+            new_has_a = acodec != "none"
+            if new_has_a and not cur_has_a:
+                video_by_h[h] = f
+                continue
+            if cur_has_a and not new_has_a:
+                continue
+            # Same audio-ness — keep larger filesize (usually higher bitrate).
+            cur_size = cur.get("filesize") or cur.get("filesize_approx") or 0
+            new_size = f.get("filesize") or f.get("filesize_approx") or 0
+            if new_size > cur_size:
+                video_by_h[h] = f
+        elif acodec != "none":
+            audio.append(f)
+    videos = sorted(video_by_h.values(), key=lambda f: f.get("height") or 0)
+    audios = sorted(audio, key=lambda f: f.get("abr") or 0)
+    return videos, audios
 
 
 @loader.tds
@@ -101,11 +194,18 @@ class YtDlMod(loader.Module):
         "switch": "<b>[YouTube-Dl]</b> AutoDownload is <b>{}</b>",
         "not_chat": "<b>[YouTube-Dl]</b> This command available only in a chat",
         "preparing": "<b>[YouTube-Dl]</b> Preparing...",
+        "probing": "<b>[YouTube-Dl]</b> Probing formats...",
         "downloading": "<b>[YouTube-Dl]</b> Downloading...",
         "noargs": "<b>[YouTube-Dl]</b> No args!",
-        "pick_kind": "<b>[YouTube-Dl]</b> What to download?\n<code>{}</code>",
-        "pick_video": "<b>[YouTube-Dl]</b> Video quality:\n<code>{}</code>",
-        "pick_audio": "<b>[YouTube-Dl]</b> Audio bitrate:\n<code>{}</code>",
+        "no_formats": "<b>[YouTube-Dl]</b> No downloadable formats found",
+        "pick_kind": (
+            "<b>[YouTube-Dl]</b> <b>{title}</b>\n"
+            "👤 <i>{uploader}</i>"
+            "{duration}"
+            "\n\n<code>{url}</code>\n\nWhat to download?"
+        ),
+        "pick_video": "<b>[YouTube-Dl]</b> <b>{title}</b>\n\nVideo quality:",
+        "pick_audio": "<b>[YouTube-Dl]</b> <b>{title}</b>\n\nAudio bitrate:",
         "content_too_short": "<b>[YouTube-Dl]</b> Downloading content too short!",
         "geoban": (
             "<b>[YouTube-Dl]</b> The video is not available "
@@ -181,7 +281,7 @@ class YtDlMod(loader.Module):
         await self._download_audio(m, url, "320", reply=await m.get_reply_message())
 
     async def ytdlcmd(self, m: Message):
-        """.ytdl <link / reply_to_link> - choose quality via inline buttons"""
+        """.ytdl <link / reply_to_link> - probe formats and pick via inline buttons"""
         url = await self._resolve_url(m, is_watcher=False)
         if not url:
             return await utils.answer(m, self.strings("noargs", m))
@@ -189,77 +289,51 @@ class YtDlMod(loader.Module):
         reply = await m.get_reply_message()
         reply_id = reply.id if reply else None
 
+        progress = await utils.answer(m, self.strings("probing"))
+        if isinstance(progress, list):
+            progress = progress[0]
+
+        info = await self._probe(progress, url)
+        if info is None:
+            return
+
+        videos, audios = _classify_formats(info)
+        if not videos and not audios:
+            return await utils.answer(progress, self.strings("no_formats"))
+
+        # Stash so the inline callbacks (which only carry args) can find it.
+        token = info.get("id") or os.urandom(8).hex()
+        self._cache[token] = {
+            "url": url,
+            "info": info,
+            "videos": videos,
+            "audios": audios,
+        }
+        # Best-effort eviction of the oldest entry once we hit the cap.
+        if len(self._cache) > 32:
+            self._cache.pop(next(iter(self._cache)))
+
+        with contextlib.suppress(Exception):
+            await progress.delete()
+
+        title = utils.escape_html(info.get("title") or "Untitled")
+        uploader = utils.escape_html(info.get("uploader") or "Unknown")
+        duration = info.get("duration")
+        duration_str = (
+            f"\n⏱ <code>{_human_duration(duration)}</code>" if duration else ""
+        )
+
         await self.inline.form(
-            self.strings("pick_kind").format(utils.escape_html(url)),
+            self.strings("pick_kind").format(
+                title=title,
+                uploader=uploader,
+                duration=duration_str,
+                url=utils.escape_html(url),
+            ),
             message=m,
-            reply_markup=self._kind_markup(url, reply_id),
+            reply_markup=self._kind_markup(token, reply_id, videos, audios),
+            photo=info.get("thumbnail") or None,
         )
-
-    # ---------------------------------------------------- inline keyboards
-
-    def _chunk(self, buttons: list, per_row: int = 2) -> list:
-        return [buttons[i : i + per_row] for i in range(0, len(buttons), per_row)]
-
-    def _kind_markup(self, url: str, reply_id: Optional[int]) -> list:
-        return [
-            [
-                {
-                    "text": "🎬 Video",
-                    "callback": self._inline_show_video,
-                    "args": (url, reply_id),
-                },
-                {
-                    "text": "🎵 Audio",
-                    "callback": self._inline_show_audio,
-                    "args": (url, reply_id),
-                },
-            ],
-            [{"text": "✖ Cancel", "callback": self._inline_cancel}],
-        ]
-
-    def _video_markup(self, url: str, reply_id: Optional[int]) -> list:
-        buttons = [
-            {
-                "text": f"🎬 {label}",
-                "callback": self._inline_pick,
-                "args": (url, "video", fmt, reply_id),
-            }
-            for label, fmt in _VIDEO_QUALITIES
-        ]
-        rows = self._chunk(buttons, 2)
-        rows.append(
-            [
-                {
-                    "text": "« Back",
-                    "callback": self._inline_back,
-                    "args": (url, reply_id),
-                },
-                {"text": "✖ Cancel", "callback": self._inline_cancel},
-            ]
-        )
-        return rows
-
-    def _audio_markup(self, url: str, reply_id: Optional[int]) -> list:
-        buttons = [
-            {
-                "text": f"🎵 {label}",
-                "callback": self._inline_pick,
-                "args": (url, "audio", quality, reply_id),
-            }
-            for label, quality in _AUDIO_QUALITIES
-        ]
-        rows = self._chunk(buttons, 2)
-        rows.append(
-            [
-                {
-                    "text": "« Back",
-                    "callback": self._inline_back,
-                    "args": (url, reply_id),
-                },
-                {"text": "✖ Cancel", "callback": self._inline_cancel},
-            ]
-        )
-        return rows
 
     async def watcher(self, m: Message):
         if not isinstance(m, Message):
@@ -270,6 +344,103 @@ class YtDlMod(loader.Module):
                 return
             await self._download_video(m, url, "best", reply=None)
 
+    # ---------------------------------------------------- inline keyboards
+
+    def _chunk(self, buttons: list, per_row: int = 2) -> list:
+        return [buttons[i : i + per_row] for i in range(0, len(buttons), per_row)]
+
+    def _kind_markup(
+        self,
+        token: str,
+        reply_id: Optional[int],
+        videos: List[dict],
+        audios: List[dict],
+    ) -> list:
+        rows = []
+        if videos:
+            rows.append(
+                [
+                    {
+                        "text": f"🎬 Video ({len(videos)} options)",
+                        "callback": self._inline_show_video,
+                        "args": (token, reply_id),
+                    }
+                ]
+            )
+        # mp3 path is always available via FFmpegExtractAudio fallback.
+        n = len(audios) if audios else len(_AUDIO_PRESETS)
+        rows.append(
+            [
+                {
+                    "text": f"🎵 Audio ({n} options)",
+                    "callback": self._inline_show_audio,
+                    "args": (token, reply_id),
+                }
+            ]
+        )
+        rows.append([{"text": "✖ Cancel", "callback": self._inline_cancel}])
+        return rows
+
+    def _video_markup(
+        self, token: str, reply_id: Optional[int], videos: List[dict]
+    ) -> list:
+        buttons = [
+            {
+                "text": f"🎬 {_video_label(f)}",
+                "callback": self._inline_pick,
+                "args": (token, "video", f["format_id"], reply_id),
+            }
+            for f in videos
+        ]
+        rows = self._chunk(buttons, 2)
+        rows.append(
+            [
+                {
+                    "text": "« Back",
+                    "callback": self._inline_back,
+                    "args": (token, reply_id),
+                },
+                {"text": "✖ Cancel", "callback": self._inline_cancel},
+            ]
+        )
+        return rows
+
+    def _audio_markup(
+        self, token: str, reply_id: Optional[int], audios: List[dict]
+    ) -> list:
+        if audios:
+            buttons = [
+                {
+                    "text": f"🎵 {_audio_label(f)}",
+                    "callback": self._inline_pick,
+                    "args": (token, "audio", f["format_id"], reply_id),
+                }
+                for f in audios
+            ]
+        else:
+            # No per-format audio streams — fall back to bestaudio + transcode
+            # to the requested mp3 bitrate (preset-based path).
+            buttons = [
+                {
+                    "text": f"🎵 {label}",
+                    "callback": self._inline_pick,
+                    "args": (token, "audio_preset", quality, reply_id),
+                }
+                for label, quality in _AUDIO_PRESETS
+            ]
+        rows = self._chunk(buttons, 2)
+        rows.append(
+            [
+                {
+                    "text": "« Back",
+                    "callback": self._inline_back,
+                    "args": (token, reply_id),
+                },
+                {"text": "✖ Cancel", "callback": self._inline_cancel},
+            ]
+        )
+        return rows
+
     # -------------------------------------------------------- inline callbacks
 
     async def _inline_cancel(self, call: InlineCall) -> None:
@@ -277,47 +448,78 @@ class YtDlMod(loader.Module):
         with contextlib.suppress(Exception):
             await call.delete()
 
+    def _entry(self, token: str) -> Optional[Dict[str, Any]]:
+        return self._cache.get(token)
+
     async def _inline_back(
-        self, call: InlineCall, url: str, reply_id: Optional[int]
+        self, call: InlineCall, token: str, reply_id: Optional[int]
     ) -> None:
         await call.answer()
+        entry = self._entry(token)
+        if not entry:
+            with contextlib.suppress(Exception):
+                await call.delete()
+            return
+        info = entry["info"]
+        title = utils.escape_html(info.get("title") or "Untitled")
+        uploader = utils.escape_html(info.get("uploader") or "Unknown")
+        duration = info.get("duration")
+        duration_str = (
+            f"\n⏱ <code>{_human_duration(duration)}</code>" if duration else ""
+        )
         with contextlib.suppress(Exception):
             await call.edit(
-                self.strings("pick_kind").format(utils.escape_html(url)),
-                reply_markup=self._kind_markup(url, reply_id),
+                self.strings("pick_kind").format(
+                    title=title,
+                    uploader=uploader,
+                    duration=duration_str,
+                    url=utils.escape_html(entry["url"]),
+                ),
+                reply_markup=self._kind_markup(
+                    token, reply_id, entry["videos"], entry["audios"]
+                ),
             )
 
     async def _inline_show_video(
-        self, call: InlineCall, url: str, reply_id: Optional[int]
+        self, call: InlineCall, token: str, reply_id: Optional[int]
     ) -> None:
         await call.answer()
+        entry = self._entry(token)
+        if not entry:
+            return
+        title = utils.escape_html(entry["info"].get("title") or "Untitled")
         with contextlib.suppress(Exception):
             await call.edit(
-                self.strings("pick_video").format(utils.escape_html(url)),
-                reply_markup=self._video_markup(url, reply_id),
+                self.strings("pick_video").format(title=title),
+                reply_markup=self._video_markup(token, reply_id, entry["videos"]),
             )
 
     async def _inline_show_audio(
-        self, call: InlineCall, url: str, reply_id: Optional[int]
+        self, call: InlineCall, token: str, reply_id: Optional[int]
     ) -> None:
         await call.answer()
+        entry = self._entry(token)
+        if not entry:
+            return
+        title = utils.escape_html(entry["info"].get("title") or "Untitled")
         with contextlib.suppress(Exception):
             await call.edit(
-                self.strings("pick_audio").format(utils.escape_html(url)),
-                reply_markup=self._audio_markup(url, reply_id),
+                self.strings("pick_audio").format(title=title),
+                reply_markup=self._audio_markup(token, reply_id, entry["audios"]),
             )
 
     async def _inline_pick(
         self,
         call: InlineCall,
-        url: str,
+        token: str,
         kind: str,
-        param: Optional[str],
+        param: str,
         reply_id: Optional[int],
     ) -> None:
         await call.answer(f"Downloading {kind}...")
-        # form dict is injected by the inline manager; falls back to the
-        # callback's own chat if absent (defensive — should not happen).
+        entry = self._entry(token)
+        url = entry["url"] if entry else None
+
         form = getattr(call, "form", None) or {}
         chat = (
             form.get("chat") or getattr(call.message, "chat", None) or call.from_user.id
@@ -325,18 +527,35 @@ class YtDlMod(loader.Module):
         with contextlib.suppress(Exception):
             await call.delete()
 
+        if not url:
+            return
+
         status = await self.ctx.client.send_message(chat, self.strings("preparing"))
         reply = None
         if reply_id is not None:
             with contextlib.suppress(Exception):
                 reply = await self.ctx.client.get_messages(chat, ids=reply_id)
 
-        if kind == "audio":
-            await self._download_audio(status, url, param or "320", reply=reply)
-        else:
-            await self._download_video(status, url, param or "best", reply=reply)
+        if kind == "video":
+            # Pair the chosen video stream with the best audio so we always
+            # get muxed mp4 even if the picked format is video-only.
+            await self._download_video(status, url, f"{param}+bestaudio/{param}", reply)
+        elif kind == "audio":
+            await self._download_audio(status, url, "320", reply, fmt_id=param)
+        else:  # audio_preset
+            await self._download_audio(status, url, param, reply)
+
+        # Drop cache entry once the user committed to a download.
+        self._cache.pop(token, None)
 
     # ----------------------------------------------------------------- core
+
+    async def client_ready(self, _, __):
+        # token → {url, info, videos, audios}; bounded, evicted FIFO.
+        self._cache: Dict[str, Dict[str, Any]] = {}
+
+    async def _probe(self, m: Message, url: str) -> Optional[dict]:
+        return await self._extract(m, url, _probe_opts())
 
     async def _download_video(
         self, m: Message, url: str, fmt: str, reply: Optional[Message]
@@ -350,12 +569,17 @@ class YtDlMod(loader.Module):
         await self._send_video(m, rip_data, reply)
 
     async def _download_audio(
-        self, m: Message, url: str, quality: str, reply: Optional[Message]
+        self,
+        m: Message,
+        url: str,
+        quality: str,
+        reply: Optional[Message],
+        fmt_id: Optional[str] = None,
     ) -> None:
         m = await utils.answer(m, self.strings("preparing", m))
         if isinstance(m, list):
             m = m[0]
-        rip_data = await self._extract(m, url, _audio_opts(quality))
+        rip_data = await self._extract(m, url, _audio_opts(quality, fmt_id))
         if rip_data is None:
             return
         await self._send_audio(m, rip_data, reply)
@@ -420,8 +644,14 @@ class YtDlMod(loader.Module):
     async def _send_video(
         self, m: Message, rip_data: dict, reply: Optional[Message]
     ) -> None:
-        path = f"{rip_data['id']}.mp4"
-        if not os.path.exists(path):
+        # merge_output_format=mp4 + FFmpegVideoConvertor land the file as
+        # <id>.mp4; if the source was already mp4-compatible yt-dlp may skip
+        # the convertor and leave the original ext. Probe both.
+        candidates = [f"{rip_data['id']}.mp4"]
+        for ext in ("webm", "mkv", "mov"):
+            candidates.append(f"{rip_data['id']}.{ext}")
+        path = next((p for p in candidates if os.path.exists(p)), None)
+        if not path:
             return await utils.answer(m, self.strings("err").format("file not found"))
 
         downloads = rip_data.get("requested_downloads") or [{}]
