@@ -380,7 +380,6 @@ class CommandDispatcher:
 
     async def handle_incoming(self, event):
         """Handle all incoming messages"""
-        logging.debug("Incoming message!")
         message = utils.censor(getattr(event, "message", event))
         blacklist_chats = self._db.get(main.__name__, "blacklist_chats", [])
         whitelist_chats = self._db.get(main.__name__, "whitelist_chats", [])
