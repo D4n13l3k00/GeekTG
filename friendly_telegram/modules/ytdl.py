@@ -121,14 +121,17 @@ def _video_label(fmt: dict) -> str:
     fps = fmt.get("fps") or 0
     ext = fmt.get("ext") or ""
     size = _human_size(fmt.get("filesize") or fmt.get("filesize_approx"))
-    parts = [f"{h}p"] if h else []
-    if fps and fps > 30:
-        parts[-1] = f"{parts[-1]}{int(fps)}"
+    parts: List[str] = []
+    if h > 0:
+        parts.append(f"{h}p{int(fps)}" if fps and fps > 30 else f"{h}p")
     if ext:
         parts.append(ext)
     if size:
         parts.append(size)
-    return " · ".join(parts) if parts else fmt.get("format_id", "?")
+    if not parts:
+        # Last-ditch label so the button at least shows *something*.
+        parts.append(fmt.get("format_note") or fmt.get("format_id") or "video")
+    return " · ".join(parts)
 
 
 def _audio_label(fmt: dict) -> str:
@@ -146,41 +149,48 @@ def _audio_label(fmt: dict) -> str:
 
 
 def _classify_formats(info: dict) -> Tuple[List[dict], List[dict]]:
-    """Split yt-dlp ``formats`` into (video-with-audio-or-video-only, audio-only).
+    """Split yt-dlp ``formats`` into (video, audio-only).
 
-    For video we keep only entries that have a video codec, deduped by height
-    (best filesize wins), so the picker doesn't show a wall of 50 buttons.
+    Video entries are deduped by (height, fps) so we don't get a wall of
+    50 buttons. When height is unknown we keep the entry under a synthetic
+    ``-1`` bucket so single-stream sources (Instagram reels, plain mp4s,
+    etc.) still surface in the picker.
     """
     formats = info.get("formats") or []
-    video_by_h: Dict[int, dict] = {}
+    video_by_key: Dict[Tuple[int, int], dict] = {}
     audio: List[dict] = []
     for f in formats:
         vcodec = f.get("vcodec") or "none"
         acodec = f.get("acodec") or "none"
         if vcodec != "none":
-            h = f.get("height") or 0
-            if h <= 0:
-                continue
-            cur = video_by_h.get(h)
+            h = f.get("height") or -1
+            fps = int(f.get("fps") or 0)
+            key = (h, fps)
+            cur = video_by_key.get(key)
             if cur is None:
-                video_by_h[h] = f
+                video_by_key[key] = f
                 continue
-            # Prefer the format with both audio+video (avoids the muxing path).
             cur_has_a = (cur.get("acodec") or "none") != "none"
             new_has_a = acodec != "none"
             if new_has_a and not cur_has_a:
-                video_by_h[h] = f
+                video_by_key[key] = f
                 continue
             if cur_has_a and not new_has_a:
                 continue
-            # Same audio-ness — keep larger filesize (usually higher bitrate).
             cur_size = cur.get("filesize") or cur.get("filesize_approx") or 0
             new_size = f.get("filesize") or f.get("filesize_approx") or 0
             if new_size > cur_size:
-                video_by_h[h] = f
+                video_by_key[key] = f
         elif acodec != "none":
             audio.append(f)
-    videos = sorted(video_by_h.values(), key=lambda f: f.get("height") or 0)
+
+    # Some extractors don't expose a ``formats`` array at all — they just
+    # set the top-level ``url``/``ext`` fields. Treat that as a single
+    # "best available" video entry so the picker still works.
+    if not video_by_key and not audio and info.get("url"):
+        return [info], []
+
+    videos = sorted(video_by_key.values(), key=lambda f: f.get("height") or 0)
     audios = sorted(audio, key=lambda f: f.get("abr") or 0)
     return videos, audios
 
@@ -239,16 +249,10 @@ class YtDlMod(loader.Module):
         args = utils.get_args_raw(m)
         return args or (reply.raw_text if reply else None) or None
 
-    async def _show_error_and_dismiss(self, m: Message, key: str, *args) -> None:
-        err_msg = await utils.answer(m, self.strings(key, m).format(*args))
-        if isinstance(err_msg, list):
-            await asyncio.sleep(5)
-            for msg in err_msg:
-                with contextlib.suppress(Exception):
-                    await msg.delete()
-        elif err_msg is not None:
-            with contextlib.suppress(Exception):
-                await err_msg.delete()
+    async def _show_error(self, m: Message, key: str, *args) -> None:
+        """Print an error and leave it on screen. Don't auto-delete — the
+        user needs to *see* what went wrong."""
+        await utils.answer(m, self.strings(key, m).format(*args))
 
     # --------------------------------------------------------------- commands
 
@@ -295,6 +299,7 @@ class YtDlMod(loader.Module):
 
         info = await self._probe(progress, url)
         if info is None:
+            # _probe → _extract already wrote the error onto ``progress``.
             return
 
         videos, audios = _classify_formats(info)
@@ -313,27 +318,50 @@ class YtDlMod(loader.Module):
         if len(self._cache) > 32:
             self._cache.pop(next(iter(self._cache)))
 
-        with contextlib.suppress(Exception):
-            await progress.delete()
-
         title = utils.escape_html(info.get("title") or "Untitled")
         uploader = utils.escape_html(info.get("uploader") or "Unknown")
         duration = info.get("duration")
         duration_str = (
             f"\n⏱ <code>{_human_duration(duration)}</code>" if duration else ""
         )
+        # Photo captions are capped at 1024 chars; long share-links with
+        # tracking params (Instagram ?igsh=…) can blow past that. Strip the
+        # query string for display and ellipsize as a final guard.
+        display_url = url.split("?", 1)[0]
+        if len(display_url) > 200:
+            display_url = display_url[:197] + "..."
 
-        await self.inline.form(
-            self.strings("pick_kind").format(
-                title=title,
-                uploader=uploader,
-                duration=duration_str,
-                url=utils.escape_html(url),
-            ),
-            message=m,
-            reply_markup=self._kind_markup(token, reply_id, videos, audios),
-            photo=info.get("thumbnail") or None,
+        caption = self.strings("pick_kind").format(
+            title=title,
+            uploader=uploader,
+            duration=duration_str,
+            url=utils.escape_html(display_url),
         )
+
+        # Keep the placeholder until the inline form really lands — the form
+        # call replaces it implicitly when message=m_orig is the same one.
+        # We pass ``progress`` (already an out-message) so the form swap
+        # happens cleanly without leaving an orphan "Probing..." behind.
+        markup = self._kind_markup(token, reply_id, videos, audios)
+        thumb = info.get("thumbnail")
+        result = await self.inline.form(
+            caption,
+            message=progress,
+            reply_markup=markup,
+            photo=thumb or None,
+        )
+        # Some sites hand out thumbnail URLs that BotAPI rejects (CDN auth,
+        # bad cert, redirect, >5MB). Fall back to a text-only form so the
+        # picker still works.
+        if result is False and thumb:
+            result = await self.inline.form(
+                caption,
+                message=progress,
+                reply_markup=markup,
+            )
+        if result is False:
+            # inline.form already printed its own error onto ``progress``.
+            self._cache.pop(token, None)
 
     async def watcher(self, m: Message):
         if not isinstance(m, Message):
@@ -555,7 +583,7 @@ class YtDlMod(loader.Module):
         self._cache: Dict[str, Dict[str, Any]] = {}
 
     async def _probe(self, m: Message, url: str) -> Optional[dict]:
-        return await self._extract(m, url, _probe_opts())
+        return await self._extract(m, url, _probe_opts(), status_key="probing")
 
     async def _download_video(
         self, m: Message, url: str, fmt: str, reply: Optional[Message]
@@ -584,32 +612,34 @@ class YtDlMod(loader.Module):
             return
         await self._send_audio(m, rip_data, reply)
 
-    async def _extract(self, m: Message, url: str, opts: dict) -> Optional[dict]:
+    async def _extract(
+        self, m: Message, url: str, opts: dict, status_key: str = "downloading"
+    ) -> Optional[dict]:
         loop = asyncio.get_event_loop()
         try:
-            await utils.answer(m, self.strings("downloading", m))
+            await utils.answer(m, self.strings(status_key, m))
             with YoutubeDL(opts) as rip:
                 return await loop.run_in_executor(
                     None, functools.partial(rip.extract_info, url)
                 )
         except DownloadError as e:
-            await self._show_error_and_dismiss(m, "err", str(e))
+            await self._show_error(m, "err", str(e))
         except ContentTooShortError:
-            await self._show_error_and_dismiss(m, "content_too_short")
+            await self._show_error(m, "content_too_short")
         except GeoRestrictedError:
-            await self._show_error_and_dismiss(m, "geoban")
+            await self._show_error(m, "geoban")
         except MaxDownloadsReached:
-            await self._show_error_and_dismiss(m, "maxdlserr")
+            await self._show_error(m, "maxdlserr")
         except PostProcessingError:
-            await self._show_error_and_dismiss(m, "pperr")
+            await self._show_error(m, "pperr")
         except UnavailableVideoError:
-            await self._show_error_and_dismiss(m, "noformat")
+            await self._show_error(m, "noformat")
         except XAttrMetadataError as e:
-            await self._show_error_and_dismiss(m, "xameerr", e)
+            await self._show_error(m, "xameerr", e)
         except ExtractorError:
-            await self._show_error_and_dismiss(m, "exporterr")
+            await self._show_error(m, "exporterr")
         except Exception as e:
-            await self._show_error_and_dismiss(m, "err2", type(e).__name__, str(e))
+            await self._show_error(m, "err2", type(e).__name__, str(e))
         return None
 
     async def _send_audio(
