@@ -567,11 +567,19 @@ class YtDlMod(loader.Module):
         if kind == "video":
             # Pair the chosen video stream with the best audio so we always
             # get muxed mp4 even if the picked format is video-only.
-            await self._download_video(status, url, f"{param}+bestaudio/{param}", reply)
+            await self._download_video(
+                status,
+                url,
+                f"{param}+bestaudio/{param}",
+                reply,
+                already_prepared=True,
+            )
         elif kind == "audio":
-            await self._download_audio(status, url, "320", reply, fmt_id=param)
+            await self._download_audio(
+                status, url, "320", reply, fmt_id=param, already_prepared=True
+            )
         else:  # audio_preset
-            await self._download_audio(status, url, param, reply)
+            await self._download_audio(status, url, param, reply, already_prepared=True)
 
         # Drop cache entry once the user committed to a download.
         self._cache.pop(token, None)
@@ -583,14 +591,21 @@ class YtDlMod(loader.Module):
         self._cache: Dict[str, Dict[str, Any]] = {}
 
     async def _probe(self, m: Message, url: str) -> Optional[dict]:
-        return await self._extract(m, url, _probe_opts(), status_key="probing")
+        # Caller already set "Probing..." on ``m``; don't re-edit.
+        return await self._extract(m, url, _probe_opts(), status_key=None)
 
     async def _download_video(
-        self, m: Message, url: str, fmt: str, reply: Optional[Message]
+        self,
+        m: Message,
+        url: str,
+        fmt: str,
+        reply: Optional[Message],
+        already_prepared: bool = False,
     ) -> None:
-        m = await utils.answer(m, self.strings("preparing", m))
-        if isinstance(m, list):
-            m = m[0]
+        if not already_prepared:
+            m = await utils.answer(m, self.strings("preparing", m))
+            if isinstance(m, list):
+                m = m[0]
         rip_data = await self._extract(m, url, _video_opts(fmt))
         if rip_data is None:
             return
@@ -603,21 +618,34 @@ class YtDlMod(loader.Module):
         quality: str,
         reply: Optional[Message],
         fmt_id: Optional[str] = None,
+        already_prepared: bool = False,
     ) -> None:
-        m = await utils.answer(m, self.strings("preparing", m))
-        if isinstance(m, list):
-            m = m[0]
+        if not already_prepared:
+            m = await utils.answer(m, self.strings("preparing", m))
+            if isinstance(m, list):
+                m = m[0]
         rip_data = await self._extract(m, url, _audio_opts(quality, fmt_id))
         if rip_data is None:
             return
         await self._send_audio(m, rip_data, reply)
 
     async def _extract(
-        self, m: Message, url: str, opts: dict, status_key: str = "downloading"
+        self,
+        m: Message,
+        url: str,
+        opts: dict,
+        status_key: Optional[str] = "downloading",
     ) -> Optional[dict]:
+        """Run yt-dlp's blocking extract_info off-thread.
+
+        ``status_key`` may be ``None`` when the caller has already written
+        the relevant status line onto ``m`` — re-writing it would just
+        produce a no-op edit (Telethon raises MessageNotModifiedError).
+        """
         loop = asyncio.get_event_loop()
         try:
-            await utils.answer(m, self.strings(status_key, m))
+            if status_key is not None:
+                await utils.answer(m, self.strings(status_key, m))
             with YoutubeDL(opts) as rip:
                 return await loop.run_in_executor(
                     None, functools.partial(rip.extract_info, url)
