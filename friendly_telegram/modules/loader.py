@@ -231,7 +231,7 @@ class LoaderMod(loader.Module):
 
     async def _get_modules_to_load(self):
         todo = await self.get_repo_list(
-            self.ctx.db.get(__name__, "chosen_preset", None)
+            self.ctx.db.get(__name__, "chosen_preset", "none")
         )
         todo = todo.difference(self.ctx.db.get(__name__, "unloaded_modules", []))
         todo.update(self.ctx.db.get(__name__, "loaded_modules", []))
@@ -239,7 +239,7 @@ class LoaderMod(loader.Module):
 
     async def get_repo_list(self, preset=None):
         if preset is None or preset == "none":
-            preset = "minimal"
+            return set()
 
         # Strip trailing slash so we don't build ``…/main//preset.txt`` and
         # take a needless 307 redirect on every preset fetch.
