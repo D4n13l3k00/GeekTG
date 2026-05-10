@@ -49,6 +49,7 @@ class CoreMod(loader.Module):
         "delalias_args": "🚫 <b>You must provide the alias name</b>",
         "alias_removed": "✅ <b>Alias <code>{}</code> removed.</b>",
         "no_alias": "🚫 <b>Alias <code>{}</code> does not exist</b>",
+        "who_to_unblacklist": "🚫 <b>Specify a user (id or reply)</b>",
         "no_pack": "❓ <b>What translation pack should be added?</b>",
         "bad_pack": "🚫 <b>Invalid translation pack specified</b>",
         "trnsl_saved": "✅ <b>Translation pack added</b>",
@@ -107,16 +108,22 @@ class CoreMod(loader.Module):
         """Get GeekTG version"""
         ver = getattr(main, "__version__", False)
 
-        branch = os.popen(
-            "git rev-parse --abbrev-ref HEAD"
-        ).read()  # skipcq: BAN-B605, BAN-B607
+        try:
+            branch = (
+                os.popen("git rev-parse --abbrev-ref HEAD")  # noqa: S605, S607
+                .read()
+                .strip()
+            )
+        except OSError:
+            branch = ""
 
         if "beta" in branch:
-            await utils.answer(message, self.strings("geek_beta").format(*ver))
+            key = "geek_beta"
         elif "alpha" in branch:
-            await utils.answer(message, self.strings("geek_alpha").format(*ver))
+            key = "geek_alpha"
         else:
-            await utils.answer(message, self.strings("geek").format(*ver))
+            key = "geek"
+        await utils.answer(message, self.strings(key).format(*ver))
 
     async def blacklistcmd(self, message: Message) -> None:
         """.blacklist [id]
@@ -151,13 +158,10 @@ class CoreMod(loader.Module):
             return int(utils.get_args(message)[0])
         except (ValueError, IndexError):
             reply = await message.get_reply_message()
-
             if reply:
-                return (await message.get_reply_message()).sender_id
-
+                return reply.sender_id
             if message.is_private:
                 return message.to_id.user_id
-
             await utils.answer(message, self.strings("who_to_unblacklist", message))
             return
 
@@ -205,7 +209,9 @@ class CoreMod(loader.Module):
             return
 
         oldprefix = self.ctx.db.get(main.__name__, "command_prefix", ".")
-        self.ctx.db.set(main.__name__, "command_prefix", args)
+        # Save the single character only — the validation above guarantees
+        # ``args`` is one char, but being explicit guards against future drift.
+        self.ctx.db.set(main.__name__, "command_prefix", args[0])
         await utils.answer(
             message,
             self.strings("prefix_set", message).format(
@@ -218,11 +224,11 @@ class CoreMod(loader.Module):
     async def aliasescmd(self, message: Message) -> None:
         """Print all your aliases"""
         aliases = self.allmodules.aliases
-        string = self.strings("aliases", message)
-
-        string += "\n".join([f"\n{i}: {y}" for i, y in aliases.items()])
-
-        await utils.answer(message, string)
+        body = "\n".join(
+            f"\n{utils.escape_html(k)}: {utils.escape_html(v)}"
+            for k, v in aliases.items()
+        )
+        await utils.answer(message, self.strings("aliases", message) + body)
 
     @loader.owner
     async def addaliascmd(self, message: Message) -> None:
@@ -237,11 +243,9 @@ class CoreMod(loader.Module):
         ret = self.allmodules.add_alias(alias, cmd)
 
         if ret:
-            self.ctx.db.set(
-                __name__,
-                "aliases",
-                {**self.ctx.db.get(__name__, "aliases"), alias: cmd},
-            )
+            current = self.ctx.db.get(__name__, "aliases", {}) or {}
+            current[alias] = cmd
+            self.ctx.db.set(__name__, "aliases", current)
             await utils.answer(
                 message,
                 self.strings("alias_created", message).format(utils.escape_html(alias)),
@@ -265,8 +269,8 @@ class CoreMod(loader.Module):
         ret = self.allmodules.remove_alias(alias)
 
         if ret:
-            current = self.ctx.db.get(__name__, "aliases")
-            del current[alias]
+            current = self.ctx.db.get(__name__, "aliases", {}) or {}
+            current.pop(alias, None)
             self.ctx.db.set(__name__, "aliases", current)
             await utils.answer(
                 message,

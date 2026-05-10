@@ -100,15 +100,7 @@ class BotTokenMod(loader.Module):
             return
 
         self.ctx.db.set(_DB_NS, _DB_KEY, token)
-        # Hot-swap into running InlineManager so reload isn't strictly required;
-        # ``.restart`` is still recommended to re-bind handlers cleanly.
-        inline = getattr(self, "inline", None)
-        if inline is not None:
-            inline._token = token
-            try:
-                await inline._stop()
-            except Exception:
-                logger.debug("inline._stop failed", exc_info=True)
+        await self._hotswap_inline(token)
         await utils.answer(
             message, self.strings("saved", message).format(username=username)
         )
@@ -117,14 +109,22 @@ class BotTokenMod(loader.Module):
     async def resetbottokencmd(self, message: Message) -> None:
         """Forget the saved bot token (will create a new bot on next restart)."""
         self.ctx.db.set(_DB_NS, _DB_KEY, None)
-        inline = getattr(self, "inline", None)
-        if inline is not None:
-            inline._token = False
-            try:
-                await inline._stop()
-            except Exception:
-                logger.debug("inline._stop failed", exc_info=True)
+        await self._hotswap_inline(False)
         await utils.answer(message, self.strings("reset", message))
+
+    async def _hotswap_inline(self, token) -> None:
+        """Push *token* into a running InlineManager and stop it so the next
+        reload picks it up. Reaches into a private attribute by design — the
+        manager exposes no public setter today.
+        """
+        inline = getattr(self, "inline", None)
+        if inline is None:
+            return
+        inline._token = token  # noqa: SLF001 — see docstring
+        try:
+            await inline._stop()
+        except Exception:
+            logger.debug("inline._stop failed", exc_info=True)
 
     async def _username_for(self, token: str):
         """Validate *token* via Bot.get_me; return @username or None."""
@@ -142,4 +142,4 @@ class BotTokenMod(loader.Module):
             try:
                 await bot.session.close()
             except Exception:
-                pass
+                logger.debug("bot.session.close failed", exc_info=True)

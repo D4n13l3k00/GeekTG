@@ -22,12 +22,15 @@ logger = logging.getLogger(__name__)
 
 
 class FakeDbException(Exception):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class FakeDb:
-    def __getattr__(self, *args, **kwargs):
+    def __getattr__(self, name):
+        # Pass-through dunders so meval/repr introspection doesn't trigger
+        # the "permission required" prompt accidentally.
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
         raise FakeDbException("Database read-write permission required")
 
 
@@ -61,9 +64,45 @@ class PythonMod(loader.Module):
         )
 
     @loader.owner
-    async def evalcmd(self, message: Message) -> None:
-        """Alias for .e command"""
-        await self.ecmd(message)
+    async def ecmd(self, message: Message) -> None:
+        """Evaluates python code"""
+        phone = str(self.ctx.client.phone or "")
+        code = utils.get_args_raw(message)
+        try:
+            it = await meval(code, globals(), **await self.getattrs(message))
+        except FakeDbException:
+            await self.inline.form(
+                self.strings("db_permission"),
+                message=message,
+                reply_markup=[
+                    [
+                        {"text": "✅ Allow", "callback": self.inline__allow},
+                        {"text": "🚫 Cancel", "callback": self.inline__close},
+                    ]
+                ],
+            )
+            return
+        except Exception:
+            exc = format_exc()
+            if phone:
+                exc = exc.replace(phone, "📵")
+            await utils.answer(
+                message,
+                self.strings("err", message).format(
+                    utils.escape_html(code), utils.escape_html(exc)
+                ),
+            )
+            return
+
+        ret = self.strings("eval", message).format(
+            utils.escape_html(code), utils.escape_html(str(it))
+        )
+        if phone:
+            ret = ret.replace(phone, "📵")
+        await utils.answer(message, ret)
+
+    # .eval is a historical alias of .e — share the implementation directly.
+    evalcmd = ecmd
 
     async def inline__close(self, call: InlineCall) -> None:
         await call.answer("Operation cancelled")
@@ -73,47 +112,6 @@ class PythonMod(loader.Module):
         await call.answer("Now you can access db through .e command", show_alert=True)
         self.ctx.db.set(main.__name__, "enable_db_eval", True)
         await call.delete()
-
-    @loader.owner
-    async def ecmd(self, message: Message) -> None:
-        """Evaluates python code"""
-        phone = self.ctx.client.phone
-        ret = self.strings("eval", message)
-        try:
-            it = await meval(
-                utils.get_args_raw(message), globals(), **await self.getattrs(message)
-            )
-        except FakeDbException:
-            await self.inline.form(
-                self.strings("db_permission"),
-                message=message,
-                reply_markup=[
-                    [
-                        {
-                            "text": "✅ Allow",
-                            "callback": self.inline__allow,
-                        },
-                        {"text": "🚫 Cancel", "callback": self.inline__close},
-                    ]
-                ],
-            )
-            return
-        except Exception:
-            exc = format_exc().replace(phone, "📵")
-            await utils.answer(
-                message,
-                self.strings("err", message).format(
-                    utils.escape_html(utils.get_args_raw(message)),
-                    utils.escape_html(exc),
-                ),
-            )
-
-            return
-        ret = ret.format(
-            utils.escape_html(utils.get_args_raw(message)), utils.escape_html(it)
-        )
-        ret = ret.replace(str(phone), "📵")
-        await utils.answer(message, ret)
 
     async def getattrs(self, message):
         reply = await message.get_reply_message()

@@ -114,27 +114,21 @@ class GeekSettingsMod(loader.Module):
         [-p - only in pm]
         [-o - only out]
         [-i - only incoming]"""
-        args = utils.get_args_raw(message)
-        if not args:
+        raw = utils.get_args_raw(message)
+        if not raw:
             return await utils.answer(message, self.strings("args"))
 
-        chats, pm, out, incoming = False, False, False, False
-
-        if "-c" in args:
-            args = args.replace("-c", "").replace("  ", " ").strip()
-            chats = True
-
-        if "-p" in args:
-            args = args.replace("-p", "").replace("  ", " ").strip()
-            pm = True
-
-        if "-o" in args:
-            args = args.replace("-o", "").replace("  ", " ").strip()
-            out = True
-
-        if "-i" in args:
-            args = args.replace("-i", "").replace("  ", " ").strip()
-            incoming = True
+        # Tokenize so flags like ``-counter`` don't accidentally match ``-c``.
+        tokens = raw.split()
+        flags = {"-c", "-p", "-o", "-i"}
+        chats = "-c" in tokens
+        pm = "-p" in tokens
+        out = "-o" in tokens
+        incoming = "-i" in tokens
+        rest = [t for t in tokens if t not in flags]
+        args = " ".join(rest).strip()
+        if not args:
+            return await utils.answer(message, self.strings("args"))
 
         if chats and pm:
             pm = False
@@ -174,24 +168,22 @@ class GeekSettingsMod(loader.Module):
         await utils.answer(message, self.strings("disabled").format(args))
 
     async def nonickusercmd(self, message: Message) -> None:
-        """Allow certain command to be executed without nickname"""
+        """<reply> - Allow this user to run commands without nickname"""
         reply = await message.get_reply_message()
         u = reply.sender_id
-        if not isinstance(u, int):
-            u = u.user_id
 
         nn = self.ctx.db.get(main.__name__, "nonickusers", [])
-        if u not in nn:
-            nn += [u]
-            nn = list(set(nn))  # skipcq: PTC-W0018
-            await utils.answer(message, self.strings("user_nn").format("on"))
-        else:
-            nn = list(set(nn) - {u})
+        if u in nn:
+            nn = [x for x in nn if x != u]
             await utils.answer(message, self.strings("user_nn").format("off"))
+        else:
+            nn.append(u)
+            await utils.answer(message, self.strings("user_nn").format("on"))
 
         self.ctx.db.set(main.__name__, "nonickusers", nn)
 
     async def nonickcmdcmd(self, message: Message) -> None:
+        """<command> - Allow command to be executed without nickname"""
         args = utils.get_args_raw(message)
         if not args:
             return await utils.answer(message, self.strings("no_cmd"))
@@ -199,26 +191,16 @@ class GeekSettingsMod(loader.Module):
         if args not in self.allmodules.commands:
             return await utils.answer(message, self.strings("cmd404"))
 
+        prefix = self.ctx.db.get(main.__name__, "command_prefix", ".")
         nn = self.ctx.db.get(main.__name__, "nonickcmds", [])
-        if args not in nn:
-            nn += [args]
-            nn = list(set(nn))
-            await utils.answer(
-                message,
-                self.strings("cmd_nn").format(
-                    self.ctx.db.get(main.__name__, "command_prefix", ".") + args, "on"
-                ),
-            )
+        if args in nn:
+            nn = [x for x in nn if x != args]
+            state = "off"
         else:
-            nn = list(set(nn) - {args})
-            await utils.answer(
-                message,
-                self.strings("cmd_nn").format(
-                    self.ctx.db.get(main.__name__, "command_prefix", ".") + args,
-                    "off",
-                ),
-            )
+            nn.append(args)
+            state = "on"
 
+        await utils.answer(message, self.strings("cmd_nn").format(prefix + args, state))
         self.ctx.db.set(main.__name__, "nonickcmds", nn)
 
     async def inline__setting(self, call: InlineCall, key: str, state: bool) -> None:
@@ -243,106 +225,76 @@ class GeekSettingsMod(loader.Module):
     async def inline__close(self, call: InlineCall) -> None:
         await call.delete()
 
-    async def inline__update(
-        self, call: InlineCall, confirm_required: bool = False
+    async def _confirm_action(
+        self,
+        call: InlineCall,
+        *,
+        confirm_required: bool,
+        confirm_text_key: str,
+        accept_label: str,
+        accept_callback,
+        running_text: str,
+        command: str,
     ) -> None:
+        """Two-step confirm flow shared by .update and .restart inline buttons."""
         if confirm_required:
             await call.edit(
-                self.strings("confirm_update"),
+                self.strings(confirm_text_key),
                 reply_markup=[
                     [
-                        {"text": "🪂 Update", "callback": self.inline__update},
+                        {"text": accept_label, "callback": accept_callback},
                         {"text": "🚫 Cancel", "callback": self.inline__close},
                     ]
                 ],
             )
             return
 
-        await call.answer("You userbot is being updated...", show_alert=True)
+        await call.answer(running_text, show_alert=True)
         await call.delete()
-        m = await self.ctx.client.send_message("me", ".update")
-        await self.allmodules.commands["update"](m)
+        m = await self.ctx.client.send_message("me", command)
+        await self.allmodules.commands[command.lstrip(".")](m)
+
+    async def inline__update(
+        self, call: InlineCall, confirm_required: bool = False
+    ) -> None:
+        await self._confirm_action(
+            call,
+            confirm_required=confirm_required,
+            confirm_text_key="confirm_update",
+            accept_label="🪂 Update",
+            accept_callback=self.inline__update,
+            running_text="You userbot is being updated...",
+            command=".update",
+        )
 
     async def inline__restart(
         self, call: InlineCall, confirm_required: bool = False
     ) -> None:
-        if confirm_required:
-            await call.edit(
-                self.strings("confirm_restart"),
-                reply_markup=[
-                    [
-                        {"text": "🔄 Restart", "callback": self.inline__restart},
-                        {"text": "🚫 Cancel", "callback": self.inline__close},
-                    ]
-                ],
-            )
-            return
+        await self._confirm_action(
+            call,
+            confirm_required=confirm_required,
+            confirm_text_key="confirm_restart",
+            accept_label="🔄 Restart",
+            accept_callback=self.inline__restart,
+            running_text="You userbot is being restarted...",
+            command=".restart",
+        )
 
-        await call.answer("You userbot is being restarted...", show_alert=True)
-        await call.delete()
-        m = await self.ctx.client.send_message("me", ".restart")
-        await self.allmodules.commands["restart"](m)
+    def _toggle_button(self, label: str, key: str, default: bool) -> dict:
+        """A 2-state inline button that flips db[main][key]."""
+        on = self.ctx.db.get(main.__name__, key, default)
+        return {
+            "text": f"{'✅' if on else '🚫'} {label}",
+            "callback": self.inline__setting,
+            "args": (key, not on),
+        }
 
     def _get_settings_markup(self) -> list:
         return [
             [
-                (
-                    {
-                        "text": "✅ NoNick",
-                        "callback": self.inline__setting,
-                        "args": (
-                            "no_nickname",
-                            False,
-                        ),
-                    }
-                    if self.ctx.db.get(main.__name__, "no_nickname", True)
-                    else {
-                        "text": "🚫 NoNick",
-                        "callback": self.inline__setting,
-                        "args": (
-                            "no_nickname",
-                            True,
-                        ),
-                    }
-                ),
-                (
-                    {
-                        "text": "✅ Grep",
-                        "callback": self.inline__setting,
-                        "args": (
-                            "grep",
-                            False,
-                        ),
-                    }
-                    if self.ctx.db.get(main.__name__, "grep", True)
-                    else {
-                        "text": "🚫 Grep",
-                        "callback": self.inline__setting,
-                        "args": (
-                            "grep",
-                            True,
-                        ),
-                    }
-                ),
-                (
-                    {
-                        "text": "✅ InlineLogs",
-                        "callback": self.inline__setting,
-                        "args": (
-                            "inlinelogs",
-                            False,
-                        ),
-                    }
-                    if self.ctx.db.get(main.__name__, "inlinelogs", True)
-                    else {
-                        "text": "🚫 InlineLogs",
-                        "callback": self.inline__setting,
-                        "args": (
-                            "inlinelogs",
-                            True,
-                        ),
-                    }
-                ),
+                self._toggle_button("NoNick", "no_nickname", True),
+                self._toggle_button("Grep", "grep", True),
+                self._toggle_button("InlineLogs", "inlinelogs", True),
             ],
             [
                 {
@@ -350,7 +302,11 @@ class GeekSettingsMod(loader.Module):
                     "callback": self.inline__restart,
                     "args": (True,),
                 },
-                {"text": "🪂 Update", "callback": self.inline__update, "args": (True,)},
+                {
+                    "text": "🪂 Update",
+                    "callback": self.inline__update,
+                    "args": (True,),
+                },
             ],
             [{"text": "😌 Close menu", "callback": self.inline__close}],
         ]

@@ -39,12 +39,6 @@ class GeekInfoMod(loader.Module):
         ),
     }
 
-    def get(self, *args) -> dict:
-        return self.ctx.db.get(self.strings["name"], *args)
-
-    def set(self, *args) -> None:
-        return self.ctx.db.set(self.strings["name"], *args)
-
     async def client_ready(self, client, db) -> None:
         self._me = await client.get_me()
 
@@ -61,52 +55,45 @@ class GeekInfoMod(loader.Module):
             lambda: self.strings("_photo_url_doc"),
         )
 
-    def build_message(self):
-        """
-        Build custom message
-        """
+    def _update_status(self) -> str:
+        """HTML snippet describing whether the working copy is behind origin."""
         try:
             repo = git.Repo()
             diff = repo.git.log(["HEAD..origin", "--oneline"])
-            # Self-contained HTML: the previous default ("...</b>...<b>") was
-            # built for a template whose surrounding <b> got removed long ago,
-            # leaving an unbalanced </b> that broke caption parsing whenever
-            # the bot was behind origin.
-            upd = (
-                "⚠️ <b>Update required:</b> <code>.update</code>"
-                if diff
-                else "✅ <b>Up-to-date</b>"
-            )
         except Exception:
-            upd = ""
-        ver, gitlink = utils.get_git_info()
-        owner = (
+            logger.debug("git status check failed", exc_info=True)
+            return ""
+        if diff:
+            return "⚠️ <b>Update required:</b> <code>.update</code>"
+        return "✅ <b>Up-to-date</b>"
+
+    def _owner_html(self) -> str:
+        return (
             f'<a href="tg://user?id={self._me.id}">'
             f"{utils.escape_html(get_display_name(self._me) or '')}</a>"
         )
+
+    def _build_html(self) -> str:
+        ver, gitlink = utils.get_git_info()
         sha = utils.escape_html((ver or "")[:8] or "Unknown")
-        build = f'<a href="{utils.escape_html(gitlink or "")}">{sha}</a>'
-        fmt = (
-            self.config["custom_message"]
-            if self.config["custom_message"]
-            else self.strings("default_message")
-        )
+        return f'<a href="{utils.escape_html(gitlink or "")}">{sha}</a>'
+
+    def build_message(self) -> str:
+        """Render the .info caption using the configured (or default) template."""
+        ctx = {
+            "owner": self._owner_html(),
+            "version": utils.escape_html(utils.get_version_raw()),
+            "build": self._build_html(),
+            "upd": self._update_status(),
+            "platform": utils.get_platform_name(),
+        }
+        fmt = self.config["custom_message"] or self.strings("default_message")
         try:
-            return fmt.format(
-                owner=owner,
-                version=utils.escape_html(utils.get_version_raw()),
-                build=build,
-                upd=upd,
-                platform=utils.get_platform_name(),
-            )
-        except KeyError:
-            return self.strings("default_message").format(
-                owner=owner,
-                version=utils.escape_html(utils.get_version_raw()),
-                build=build,
-                upd=upd,
-                platform=utils.get_platform_name(),
-            )
+            return fmt.format(**ctx)
+        except (KeyError, IndexError):
+            # User-provided template referenced an unknown placeholder — fall
+            # back to the bundled default so the command keeps working.
+            return self.strings("default_message").format(**ctx)
 
     async def info_inline_handler(self, query: GeekInlineQuery) -> None:
         """

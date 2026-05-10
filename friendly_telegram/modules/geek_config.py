@@ -10,7 +10,7 @@ Licensed under the GNU GPLv3
 
 import ast
 import logging
-from typing import List, Union
+from typing import Iterator, Union
 
 from telethon.tl.types import Message
 
@@ -20,7 +20,7 @@ from ..inline.types import InlineCall
 logger = logging.getLogger(__name__)
 
 
-def chunks(lst: Union[list, tuple, set], n: int) -> List[list]:
+def chunks(lst: Union[list, tuple, set], n: int) -> Iterator[list]:
     for i in range(0, len(lst), n):
         yield lst[i : i + n]
 
@@ -53,15 +53,14 @@ class GeekConfigMod(loader.Module):
         ),
     }
 
-    def get(self, *args) -> dict:
-        return self.ctx.db.get(self.strings["name"], *args)
-
-    def set(self, *args) -> None:
-        return self.ctx.db.set(self.strings["name"], *args)
-
     async def client_ready(self, client, db) -> None:
         self._bot_id = (await self.inline.bot.get_me()).id
-        self._forms = {}
+
+    def _find_module(self, name: str):
+        return next(
+            (m for m in self.allmodules.modules if m.strings("name") == name),
+            None,
+        )
 
     @staticmethod
     async def inline__close(call: InlineCall) -> None:  # noqa
@@ -75,30 +74,35 @@ class GeekConfigMod(loader.Module):
         option: str,
         inline_message_id: str,
     ) -> None:  # noqa
-        for module in self.allmodules.modules:
-            if module.strings("name") == mod:
-                module.config[option] = query
-                if query:
-                    try:
-                        query = ast.literal_eval(query)
-                    except (ValueError, SyntaxError):
-                        pass
-                    self.ctx.db.setdefault(module.__module__, {}).setdefault(
-                        "__config__", {}
-                    )[option] = query
-                else:
-                    try:
-                        del self.ctx.db.setdefault(module.__module__, {}).setdefault(
-                            "__config__", {}
-                        )[option]
-                    except KeyError:
-                        pass
+        module = self._find_module(mod)
+        if module is not None:
+            module.config[option] = query
+            stored = query
+            if query:
+                try:
+                    stored = ast.literal_eval(query)
+                except (ValueError, SyntaxError):
+                    pass
+                self.ctx.db.setdefault(module.__module__, {}).setdefault(
+                    "__config__", {}
+                )[option] = stored
+            else:
+                self.ctx.db.setdefault(module.__module__, {}).setdefault(
+                    "__config__", {}
+                ).pop(option, None)
 
-                self.allmodules.send_config_one(module, self.ctx.db, skip_hook=True)
-                self.ctx.db.save()
+            self.allmodules.send_config_one(module, self.ctx.db, skip_hook=True)
+            self.ctx.db.save()
+            display = stored
+        else:
+            display = query
 
         await call.edit(
-            self.strings("option_saved").format(mod, option, query),
+            self.strings("option_saved").format(
+                utils.escape_html(option),
+                utils.escape_html(mod),
+                utils.escape_html(str(display)),
+            ),
             reply_markup=[
                 [
                     {
@@ -115,48 +119,51 @@ class GeekConfigMod(loader.Module):
     async def inline__configure_option(
         self, call: InlineCall, mod: str, config_opt: str
     ) -> None:  # noqa
-        for module in self.allmodules.modules:
-            if module.strings("name") == mod:
-                await call.edit(
-                    self.strings("configuring_option").format(
-                        utils.escape_html(config_opt),
-                        utils.escape_html(mod),
-                        utils.escape_html(module.config.getdoc(config_opt)),
-                        utils.escape_html(module.config.getdef(config_opt)),
-                        utils.escape_html(module.config[config_opt]),
-                    ),
-                    reply_markup=[
-                        [
-                            {
-                                "text": "✍️ Enter value",
-                                "input": "✍️ Enter new configuration value for this option",  # noqa: E501
-                                "handler": self.inline__set_config,
-                                "args": (mod, config_opt, call.inline_message_id),
-                            }
-                        ],
-                        [
-                            {
-                                "text": "👈 Back",
-                                "callback": self.inline__configure,
-                                "args": (mod,),
-                            },
-                            {"text": "🚫 Close", "callback": self.inline__close},
-                        ],
-                    ],
-                )
+        module = self._find_module(mod)
+        if module is None:
+            return
+        await call.edit(
+            self.strings("configuring_option").format(
+                utils.escape_html(config_opt),
+                utils.escape_html(mod),
+                utils.escape_html(module.config.getdoc(config_opt)),
+                utils.escape_html(str(module.config.getdef(config_opt))),
+                utils.escape_html(str(module.config[config_opt])),
+            ),
+            reply_markup=[
+                [
+                    {
+                        "text": "✍️ Enter value",
+                        "input": "✍️ Enter new configuration value for this option",  # noqa: E501
+                        "handler": self.inline__set_config,
+                        "args": (mod, config_opt, call.inline_message_id),
+                    }
+                ],
+                [
+                    {
+                        "text": "👈 Back",
+                        "callback": self.inline__configure,
+                        "args": (mod,),
+                    },
+                    {"text": "🚫 Close", "callback": self.inline__close},
+                ],
+            ],
+        )
 
     async def inline__configure(self, call: InlineCall, mod: str) -> None:  # noqa
-        btns = []
-        for module in self.allmodules.modules:
-            if module.strings("name") == mod:
-                for param in module.config:
-                    btns += [
-                        {
-                            "text": param,
-                            "callback": self.inline__configure_option,
-                            "args": (mod, param),
-                        }
-                    ]
+        module = self._find_module(mod)
+        btns = (
+            [
+                {
+                    "text": param,
+                    "callback": self.inline__configure_option,
+                    "args": (mod, param),
+                }
+                for param in module.config
+            ]
+            if module is not None
+            else []
+        )
 
         await call.edit(
             self.strings("configuring_mod").format(utils.escape_html(mod)),
@@ -177,14 +184,13 @@ class GeekConfigMod(loader.Module):
             for mod in self.allmodules.modules
             if hasattr(mod, "config") and mod.strings("name") not in blacklist
         ]
-        kb = []
-        for mod_row in chunks(to_config, 3):
-            row = [
+        kb = [
+            [
                 {"text": btn, "callback": self.inline__configure, "args": (btn,)}
                 for btn in mod_row
             ]
-            kb += [row]
-
+            for mod_row in chunks(to_config, 3)
+        ]
         kb += [[{"text": "🚫 Close", "callback": self.inline__close}]]
 
         if isinstance(call, Message):

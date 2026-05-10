@@ -73,30 +73,26 @@ class StringLoader(
 
 
 def unescape_percent(text):
+    # Repo filenames encode "." as "%d" so they can live as legal Python module
+    # names (the dot would otherwise look like a package separator). Anything
+    # else passes through unchanged. ``%%`` collapses to ``%``.
+    out = []
     i = 0
-    ln = len(text)
-    is_handling_percent = False
-    out = ""
-
-    while i < ln:
-        char = text[i]
-
-        if char == "%" and not is_handling_percent:
-            is_handling_percent = True
-            i += 1
-            continue
-
-        if char == "d" and is_handling_percent:
-            out += "."
-            is_handling_percent = False
-            i += 1
-            continue
-
-        out += char
-        is_handling_percent = False
+    while i < len(text):
+        ch = text[i]
+        if ch == "%" and i + 1 < len(text):
+            nxt = text[i + 1]
+            if nxt == "d":
+                out.append(".")
+                i += 2
+                continue
+            if nxt == "%":
+                out.append("%")
+                i += 2
+                continue
+        out.append(ch)
         i += 1
-
-    return out
+    return "".join(out)
 
 
 def get_git_api(url):
@@ -271,7 +267,10 @@ class LoaderMod(loader.Module):
                 r.content.decode("utf-8"), message, module_name, url
             )
         except Exception:
-            logger.exception(f"Failed to load {module_name}")
+            logger.exception("Failed to load %s", module_name)
+            if message is not None:
+                await utils.answer(message, self.strings("load_failed", message))
+            return False
 
     @loader.owner
     async def loadmodcmd(self, message: Message) -> None:
@@ -402,8 +401,10 @@ class LoaderMod(loader.Module):
                         message, f"🚫 <b>{utils.escape_html(str(e))}</b>"
                     )
                 return
-        except BaseException as e:
-            logger.exception(f"Loading external module failed due to {e}")
+        except Exception as e:
+            # Narrowed from BaseException so KeyboardInterrupt / SystemExit can
+            # still propagate cleanly.
+            logger.exception("Loading external module failed: %s", e)
 
             if message is not None:
                 await utils.answer(message, self.strings("load_failed", message))
@@ -622,18 +623,50 @@ class LoaderMod(loader.Module):
                 unescape_percent(mod[len("friendly-telegram.modules.") :])
             ]
 
-        it = set(self.ctx.db.get(__name__, "loaded_modules", [])).difference(
-            without_prefix
-        )
-        self.ctx.db.set(__name__, "loaded_modules", list(it))
-        it = set(self.ctx.db.get(__name__, "unloaded_modules", [])).union(
-            without_prefix
-        )
-        self.ctx.db.set(__name__, "unloaded_modules", list(it))
+        self._move_modules(loaded_to_unloaded=without_prefix)
 
         await utils.answer(
             message, self.strings("unloaded" if worked else "not_unloaded", message)
         )
+
+    def _move_modules(
+        self, *, loaded_to_unloaded=None, unloaded_to_loaded=None
+    ) -> None:
+        """Keep loaded/unloaded module name lists in sync with a single helper."""
+        if loaded_to_unloaded:
+            self.ctx.db.set(
+                __name__,
+                "loaded_modules",
+                list(
+                    set(self.ctx.db.get(__name__, "loaded_modules", []))
+                    - set(loaded_to_unloaded)
+                ),
+            )
+            self.ctx.db.set(
+                __name__,
+                "unloaded_modules",
+                list(
+                    set(self.ctx.db.get(__name__, "unloaded_modules", []))
+                    | set(loaded_to_unloaded)
+                ),
+            )
+        if unloaded_to_loaded:
+            self.ctx.db.set(
+                __name__,
+                "unloaded_modules",
+                list(
+                    set(self.ctx.db.get(__name__, "unloaded_modules", []))
+                    - set(unloaded_to_loaded)
+                ),
+            )
+            self.ctx.db.set(
+                __name__,
+                "loaded_modules",
+                list(
+                    set(self.ctx.db.get(__name__, "loaded_modules", []))
+                    | set(unloaded_to_loaded)
+                ),
+            )
 
     @loader.owner
     async def clearmodulescmd(self, message: Message) -> None:

@@ -67,18 +67,20 @@ class UpdaterMod(loader.Module):
             "Restart requested. exec=%s base=%s", sys.executable, utils.get_base_dir()
         )
         check = str(uuid.uuid4())
-        await self.ctx.db.set(__name__, "selfupdatecheck", check)
+        self.ctx.db.set(__name__, "selfupdatecheck", check)
         await asyncio.sleep(3)
         if self.ctx.db.get(__name__, "selfupdatecheck", "") != check:
             raise ValueError("A restart is already in progress!")
         self.ctx.db.set(__name__, "selfupdatechat", utils.get_chat_id(message))
-        await self.ctx.db.set(__name__, "selfupdatemsg", message.id)
+        self.ctx.db.set(__name__, "selfupdatemsg", message.id)
 
     async def restart_common(self, message: Message) -> None:
         await self.prerestart_common(message)
         atexit.register(functools.partial(_restart_via_execl, *sys.argv[1:]))
-        [handler] = logging.getLogger().handlers
-        handler.setLevel(logging.CRITICAL)
+        # Squash log noise so the disconnect race below doesn't spam stderr.
+        # We tolerate a missing handler — some test harnesses don't install one.
+        for handler in logging.getLogger().handlers:
+            handler.setLevel(logging.CRITICAL)
         for client in self.allclients:
             if client is not message.client:
                 await client.disconnect()
@@ -89,10 +91,8 @@ class UpdaterMod(loader.Module):
         """Self-update — not implemented yet."""
         await utils.answer(message, self.strings("not_implemented", message))
 
-    @loader.owner
-    async def downloadcmd(self, message: Message) -> None:
-        """Self-update — not implemented yet."""
-        await utils.answer(message, self.strings("not_implemented", message))
+    # Same body — preserved as separate command for muscle memory (.update / .download).
+    downloadcmd = updatecmd
 
     @loader.unrestricted
     async def sourcecmd(self, message: Message) -> None:
@@ -103,16 +103,18 @@ class UpdaterMod(loader.Module):
         )
 
     async def client_ready(self, client, db):
-        self._me = await client.get_me()
+        chat = db.get(__name__, "selfupdatechat")
+        msg = db.get(__name__, "selfupdatemsg")
+        if chat is None or msg is None:
+            return
 
-        if (
-            db.get(__name__, "selfupdatechat") is not None
-            and db.get(__name__, "selfupdatemsg") is not None
-        ):
-            try:
-                await self.update_complete(client)
-            except Exception:
-                logger.exception("Failed to deliver post-restart confirmation")
+        try:
+            await self.update_complete(client)
+        except Exception:
+            logger.exception("Failed to deliver post-restart confirmation")
+            # Keep state so the *next* startup can retry — clearing on failure
+            # would silently lose the receipt.
+            return
 
         self.ctx.db.set(__name__, "selfupdatechat", None)
         self.ctx.db.set(__name__, "selfupdatemsg", None)
