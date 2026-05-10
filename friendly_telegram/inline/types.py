@@ -70,9 +70,9 @@ def _load_avatar() -> "io.BytesIO":
             )
         except (FileNotFoundError, ModuleNotFoundError, OSError):
             logger.warning("Bundled avatar not found, downloading from GitHub")
-            import requests
+            import httpx
 
-            _avatar_bytes = requests.get(_AVATAR_URL, timeout=10).content
+            _avatar_bytes = httpx.get(_AVATAR_URL, timeout=10).content
     buf = io.BytesIO(_avatar_bytes)
     buf.name = "avatar.png"
     return buf

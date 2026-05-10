@@ -28,7 +28,7 @@ import uuid
 from importlib.abc import SourceLoader
 from importlib.machinery import ModuleSpec
 
-import requests
+import httpx
 import telethon
 from telethon.tl.types import Message
 
@@ -215,7 +215,7 @@ class LoaderMod(loader.Module):
 
         try:
             await self.get_repo_list(args[0])
-        except requests.exceptions.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 await utils.answer(message, self.strings("no_preset", message))
                 return
@@ -241,9 +241,8 @@ class LoaderMod(loader.Module):
         if preset is None or preset == "none":
             preset = "minimal"
 
-        r = await utils.run_sync(
-            requests.get, self.config["MODULES_REPO"] + "/" + preset + ".txt"
-        )
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.get(self.config["MODULES_REPO"] + "/" + preset + ".txt")
         r.raise_for_status()
         return set(filter(lambda x: x, r.text.split("\n")))
 
@@ -254,7 +253,8 @@ class LoaderMod(loader.Module):
             else:
                 url = self.config["MODULES_REPO"] + module_name + ".py"
 
-            r = await utils.run_sync(requests.get, url)
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.get(url)
 
             if r.status_code == 404:
                 if message is not None:
@@ -581,7 +581,8 @@ class LoaderMod(loader.Module):
             await utils.answer(message, self.strings("args_incorrect", message))
 
     async def load_repo(self, git_api):
-        req = await utils.run_sync(requests.get, git_api)
+        async with httpx.AsyncClient(timeout=30) as client:
+            req = await client.get(git_api)
 
         if req.status_code != 200:
             return False

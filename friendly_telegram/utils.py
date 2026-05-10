@@ -247,7 +247,7 @@ def _local_ips():
 
 def _public_ip(timeout=2.0):
     """Best-effort public IP lookup. Returns ``None`` on any failure."""
-    import requests
+    import httpx
 
     for url in (
         "https://api.ipify.org",
@@ -255,8 +255,8 @@ def _public_ip(timeout=2.0):
         "https://ipv4.icanhazip.com",
     ):
         try:
-            r = requests.get(url, timeout=timeout)
-            if r.ok and r.text.strip():
+            r = httpx.get(url, timeout=timeout)
+            if r.is_success and r.text.strip():
                 return r.text.strip()
         except Exception:
             continue
