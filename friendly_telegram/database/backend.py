@@ -30,9 +30,10 @@ class CloudBackend:
     def __init__(self, client):
         self._client = client
         self._me = None
-        self._db_path = None
-        self._assets_dir = None
-        self._counter_path = None
+        # Populated by ``init()``; methods below assert non-None before use.
+        self._db_path: Optional[str] = None
+        self._assets_dir: Optional[str] = None
+        self._counter_path: Optional[str] = None
         self._asset_lock = asyncio.Lock()
         self.db = None  # legacy attribute, kept for any external readers
         self.close = lambda: None
@@ -50,6 +51,7 @@ class CloudBackend:
 
     async def do_download(self) -> str:
         """Return the JSON-encoded database (as a string)."""
+        assert self._db_path is not None, "init() must run before do_download()"
         try:
             with open(self._db_path, "r", encoding="utf-8") as f:
                 return f.read() or "{}"
@@ -61,6 +63,7 @@ class CloudBackend:
 
     async def do_upload(self, data: str) -> bool:
         """Atomically persist *data* (JSON string) to disk."""
+        assert self._db_path is not None, "init() must run before do_upload()"
         tmp = f"{self._db_path}.tmp"
         try:
             with open(tmp, "w", encoding="utf-8") as f:
@@ -80,6 +83,7 @@ class CloudBackend:
     # Message would need to be updated. None of the in-tree modules do.
 
     def _next_id(self) -> int:
+        assert self._counter_path is not None, "init() must run before _next_id()"
         try:
             with open(self._counter_path, "r") as f:
                 cur = int(f.read().strip() or "0")
@@ -92,6 +96,7 @@ class CloudBackend:
 
     async def store_asset(self, message) -> int:
         async with self._asset_lock:
+            assert self._assets_dir is not None, "init() must run before store_asset()"
             asset_id = self._next_id()
             path = os.path.join(self._assets_dir, f"{asset_id}.bin")
             data = await self._to_bytes(message)
@@ -100,6 +105,7 @@ class CloudBackend:
             return asset_id
 
     async def fetch_asset(self, id_: int) -> Optional[bytes]:
+        assert self._assets_dir is not None, "init() must run before fetch_asset()"
         path = os.path.join(self._assets_dir, f"{id_}.bin")
         try:
             with open(path, "rb") as f:

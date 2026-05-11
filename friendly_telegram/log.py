@@ -37,10 +37,10 @@ class MemoryHandler(logging.Handler):
         self.capacity = capacity
         self.buffer = []
         self.handledbuffer = []
-        self.lvl = logging.WARNING  # Default loglevel
+        self.lvl: int = logging.WARNING  # Default loglevel
 
     def setLevel(self, level):
-        self.lvl = level
+        self.lvl = int(level)
 
     def dump(self):
         """Return a list of logging entries"""

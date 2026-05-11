@@ -27,6 +27,12 @@ import json
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
+
+if TYPE_CHECKING:
+    from telethon import TelegramClient
+
+    from .inline.manager import InlineManager
 
 from . import inline, security, utils
 from .api import ModuleContext
@@ -104,9 +110,11 @@ def translatable_docstring(cls):
             except AttributeError:
                 func_.__func__.__doc__ = self.strings[f"_cmd_doc_{command_}"]
         self.__doc__ = self.strings["_cls_doc"]
-        return self.config_complete._old_(self, *args, **kwargs)
+        return getattr(self.config_complete, "_old_")(self, *args, **kwargs)
 
-    config_complete._old_ = cls.config_complete
+    # ``functools.wraps`` returns an opaque ``_Wrapped`` whose attributes
+    # Pylance can't statically know — stash the original via ``setattr``.
+    setattr(config_complete, "_old_", cls.config_complete)
     cls.config_complete = config_complete
 
     for command, func in get_commands(cls).items():
@@ -168,16 +176,44 @@ class ModuleConfig(dict):
 
 
 class Module:
+    #: ``send_config_one`` swaps the dict literal subclasses assign for a
+    #: real :class:`Strings` instance (callable + indexable) before any
+    #: ``client_ready`` runs. We don't annotate this with ``Strings`` on
+    #: the base because that would make every subclass's
+    #: ``strings = {...}`` literal incompatible with the declared type.
+    #: Use :meth:`tr` for type-checked translated lookups.
     strings = {"name": "Unknown"}
 
     """There is no help for this module"""
 
+    #: Set by :meth:`Modules.send_ready_one` before ``client_ready``.
+    #: Aliased to ``self.ctx.inline``; declared here so type-checkers
+    #: see the attribute on the base class.
+    inline: "InlineManager" = None  # type: ignore[assignment]
+
+    #: Other framework-set attributes (declared for type checkers).
+    allmodules: "Modules" = None  # type: ignore[assignment]
+    allclients: List["TelegramClient"] = None  # type: ignore[assignment]
+    babel = None
+    log = None
+
+    def tr(self, key, message=None):
+        """Translate ``key`` for the ``message``'s chat language.
+
+        Equivalent to ``self.strings(key, message)`` but with a real
+        method signature so type-checkers don't get confused by the
+        runtime dict→:class:`Strings` swap. Prefer this in new code.
+        """
+        return self.strings(key, message)  # type: ignore[operator]
+
     #: Populated by the framework before :meth:`client_ready` runs. Modules
     #: that opt into the new API can read ``self.ctx.client`` / ``.db`` /
     #: ``.inline`` / ``.modules`` instead of stashing them in ``client_ready``.
-    #: Type is ``ModuleContext | None`` because the attribute exists on the
-    #: class as a sentinel before the framework has populated it.
-    ctx: "ModuleContext | None" = None
+    #: Typed as ``ModuleContext`` (not ``Optional``) because the framework
+    #: guarantees it is populated before any module code that's allowed to
+    #: read it runs. The runtime sentinel is ``None`` only during the brief
+    #: window between class instantiation and ``send_ready_one``.
+    ctx: "ModuleContext" = None  # type: ignore[assignment]
 
     def config_complete(self):
         """Will be called when module.config is populated"""
@@ -244,7 +280,10 @@ class Modules:
         self._log_handlers = []
         self.client = None
         self._initial_registration = True
-        self.added_modules = None
+        self.added_modules: Optional[Callable[["Modules"], Any]] = None
+        # Wired up by ``CommandDispatcher.init`` after construction; declared
+        # here so type checkers know the attribute can exist on a Modules.
+        self.check_security: Optional[Callable[..., Any]] = None
         self.use_inline = use_inline
         self._fs = True
         # Strong refs for fire-and-forget tasks (e.g. ``on_unload`` hooks).
@@ -307,16 +346,19 @@ class Modules:
             if key.endswith("Mod") and issubclass(value, Module):
                 ret = value()
 
-        if hasattr(module, "__version__"):
-            ret.__version__ = module.__version__
-
         if ret is None:
             ret = module.register(module_name)
             if not isinstance(ret, Module):
                 raise TypeError(f"Instance is not a Module, it is {type(ret)}")
 
+        # ``__version__`` and ``__origin__`` are stamped dynamically onto
+        # individual Module instances; they are not part of the base class.
+        ret_any: Any = ret
+        if hasattr(module, "__version__"):
+            ret_any.__version__ = module.__version__
+
         self.complete_registration(ret)
-        ret.__origin__ = origin
+        ret_any.__origin__ = origin
 
         cls_name = ret.__class__.__name__
 

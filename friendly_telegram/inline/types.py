@@ -103,10 +103,12 @@ class InlineCall:
         form=None,
     ):
         self.__dict__["_event"] = event
-        self.delete = delete
-        self.unload = unload
-        self.edit = edit
-        self.form = form
+        # Typed as ``Any`` so static checkers don't infer ``None`` from the
+        # default and reject ``await call.edit(...)`` everywhere.
+        self.delete: Any = delete
+        self.unload: Any = unload
+        self.edit: Any = edit
+        self.form: Any = form
 
     def __getattr__(self, name: str):
         # __getattr__ is only invoked when normal lookup fails, so our own
@@ -143,6 +145,11 @@ class GeekInlineQuery:
             if len(self.inline_query.query.split()) > 1
             else ""
         )
+
+    def __getattr__(self, name: str):
+        # Fallback for attributes not copied during __init__ (and to keep
+        # static checkers happy: ``answer``, ``from_user``, …).
+        return getattr(self.inline_query, name)
 
 
 def rand(size: int) -> str:

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
+    from ..database.frontend import Database
     from ..inline.manager import InlineManager
     from ..loader import Modules
 
@@ -30,7 +31,7 @@ class ModuleContext:
     """
 
     client: "TelegramClient"
-    db: Any  # friendly_telegram.database.frontend.Database — avoid import cycle
+    db: "Database"
     inline: "InlineManager"
     modules: "Modules"
     allclients: Sequence["TelegramClient"]

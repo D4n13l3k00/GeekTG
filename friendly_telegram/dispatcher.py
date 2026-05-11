@@ -22,7 +22,7 @@ import logging
 import re
 import traceback
 
-from telethon import types
+from telethon.tl.custom import Message as CustomMessage
 
 from . import loader, main, security, utils
 
@@ -134,7 +134,11 @@ class CommandDispatcher:
         if event.via_bot_id:
             return
 
-        message = utils.censor(event.message)
+        message: CustomMessage = utils.censor(event.message)
+        # Telethon types ``message`` / ``text`` / ``client`` as Optional;
+        # for command dispatch we need all three. Bail early if any is missing.
+        if message.message is None or message.client is None:
+            return
         blacklist_chats = self._db.get(main.__name__, "blacklist_chats", [])
         whitelist_chats = self._db.get(main.__name__, "whitelist_chats", [])
         whitelist_modules = self._db.get(main.__name__, "whitelist_modules", [])
@@ -213,7 +217,7 @@ class CommandDispatcher:
             if message.is_channel and message.is_group:
                 my_id = (await message.client.get_me(True)).user_id
                 chat = await message.get_chat()
-                if (
+                if chat is not None and (
                     chat.title.startswith(f"friendly-{my_id}-")
                     or chat.title == "geektg-log"
                 ):
@@ -235,31 +239,33 @@ class CommandDispatcher:
             ):  # noqa
                 return
 
-            if self._db.get(main.__name__, "grep", False):
-                if "||grep" in message.text or "|| grep" in message.text:
-                    message.raw_text = message.raw_text.replace(
-                        "||grep", "|grep"
-                    ).replace("|| grep", "| grep")
-                    message.text = message.text.replace("||grep", "|grep").replace(
+            if self._db.get(main.__name__, "grep", False) and message.text is not None:
+                msg_text = message.text  # narrow ``Optional[str]`` once
+                if "||grep" in msg_text or "|| grep" in msg_text:
+                    raw = message.raw_text or ""
+                    message.raw_text = raw.replace("||grep", "|grep").replace(
+                        "|| grep", "| grep"
+                    )
+                    message.text = msg_text.replace("||grep", "|grep").replace(
                         "|| grep", "| grep"
                     )
                     message.message = message.message.replace(
                         "||grep", "|grep"
                     ).replace("|| grep", "| grep")
                 else:
-                    grep = False
-                    if "| grep" in message.text or "|grep" in message.text:
-                        grep = message.text[message.text.find("grep ") + 5 :]
-                        message.text = message.text[
+                    grep: str = ""
+                    if "| grep" in msg_text or "|grep" in msg_text:
+                        grep = msg_text[msg_text.find("grep ") + 5 :]
+                        message.text = msg_text[
                             : (
-                                message.text.find(" | grep")
-                                if message.text.find(" | grep") > 0
-                                else message.text.find("|grep")
+                                msg_text.find(" | grep")
+                                if msg_text.find(" | grep") > 0
+                                else msg_text.find("|grep")
                             )
                         ]  # noqa
 
                     if grep:
-                        ungrep = False
+                        ungrep: str = ""
 
                         if "-v" in grep:
                             ungrep = grep[
@@ -272,8 +278,8 @@ class CommandDispatcher:
                                 grep[grep.find("grep") + 4 :] if "grep" in grep else ""
                             )
 
-                        grep = utils.escape_html(grep).strip() if grep else False
-                        ungrep = utils.escape_html(ungrep).strip() if ungrep else False
+                        grep = utils.escape_html(grep).strip() if grep else ""
+                        ungrep = utils.escape_html(ungrep).strip() if ungrep else ""
 
                         old_edit = message.edit
                         old_reply = message.reply
@@ -340,11 +346,14 @@ class CommandDispatcher:
                         message.respond = my_respond
 
             # Feature for CommandsLogger module
+            # ``loader.mods`` is a legacy attribute set by the (long-removed)
+            # CommandsLogger module. Look it up dynamically so we don't break
+            # if some third-party module still installs it.
             try:
-                if getattr(loader, "mods", False):
-                    for mod in loader.mods:
-                        if mod.name == "CommandsLogger":
-                            await mod.process_log(message)
+                mods = getattr(loader, "mods", None) or []
+                for mod in mods:
+                    if mod.name == "CommandsLogger":
+                        await mod.process_log(message)
             except Exception:
                 pass
 
@@ -371,7 +380,7 @@ class CommandDispatcher:
 
     async def handle_incoming(self, event):
         """Handle all incoming messages"""
-        message = utils.censor(getattr(event, "message", event))
+        message: CustomMessage = utils.censor(getattr(event, "message", event))
         blacklist_chats = self._db.get(main.__name__, "blacklist_chats", [])
         whitelist_chats = self._db.get(main.__name__, "whitelist_chats", [])
         whitelist_modules = self._db.get(main.__name__, "whitelist_modules", [])
@@ -386,7 +395,7 @@ class CommandDispatcher:
             modname = str(func.__self__.__class__.strings["name"])
             if (
                 modname in bl
-                and isinstance(message, types.Message)
+                and isinstance(message, CustomMessage)
                 and (
                     "*" in bl[modname]
                     or utils.get_chat_id(message) in bl[modname]

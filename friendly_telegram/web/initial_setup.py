@@ -8,6 +8,7 @@ import string
 import aiohttp_jinja2
 import telethon
 from aiohttp import web
+from telethon.sessions import MemorySession
 
 from .. import utils
 from .._device import telethon_kwargs as _device_kwargs
@@ -102,7 +103,7 @@ class InitialSetupRouter:
             flush=True,
         )
         client = telethon.TelegramClient(
-            telethon.sessions.MemorySession(),
+            MemorySession(),
             self.ctx.api_token.ID,
             self.ctx.api_token.HASH,
             connection=self.ctx.connection,

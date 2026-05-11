@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 import zipfile
+from typing import Any, Dict
 
 from aiohttp import web
 
@@ -195,7 +196,7 @@ class StatusRouter:
             return cached
 
         psutil = _try_psutil()
-        out = {"available": False}
+        out: Dict[str, Any] = {"available": False}
 
         if psutil is not None:
             if self._proc is None:

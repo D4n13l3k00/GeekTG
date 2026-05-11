@@ -15,7 +15,7 @@ from io import BytesIO
 from typing import Optional, Union
 
 from telethon.errors.rpcerrorlist import ChatSendInlineForbiddenError
-from telethon.tl.types import Message
+from telethon.tl.custom import Message
 
 from .. import loader, utils
 from ..inline.types import InlineCall
@@ -89,11 +89,12 @@ class TestMod(loader.Module):
         """Use in reply to get a dump of a message"""
         if not message.is_reply:
             return
+        reply = await message.get_reply_message()
+        if reply is None:
+            return
         await utils.answer(
             message,
-            "<code>"
-            + utils.escape_html((await message.get_reply_message()).stringify())
-            + "</code>",
+            "<code>" + utils.escape_html(reply.stringify()) + "</code>",
         )
 
     @staticmethod
@@ -121,7 +122,7 @@ class TestMod(loader.Module):
                     },
                 ]
             )
-        rows.append([{"text": "🚫 Cancel", "callback": self.cancel}])
+        rows.append([{"text": "🚫 Cancel", "callback": self.cancel, "style": "danger"}])
         return rows
 
     async def _resolve_lvl(self, message, lvl: Optional[int]) -> Optional[int]:
@@ -158,34 +159,35 @@ class TestMod(loader.Module):
     def _allow_insecure(self, message) -> bool:
         return (
             isinstance(message, Message)
-            and "force_insecure" in message.raw_text.lower()
+            and "force_insecure" in (message.raw_text or "").lower()
         )
 
     async def _prompt_level(self, message, callback, extra: tuple) -> None:
         if not self.inline.init_complete:
-            await utils.answer(message, self.strings("set_loglevel"))
+            await utils.answer(message, self.tr("set_loglevel"))
             return
         await self.inline.form(
-            text=self.strings("choose_loglevel"),
+            text=self.tr("choose_loglevel"),
             reply_markup=self._level_keyboard(callback, extra),
             message=message,
         )
 
     async def _confidential_gate(self, message, lvl: int, named) -> None:
         if not self.inline.init_complete:
-            await utils.answer(message, self.strings("confidential_text").format(named))
+            await utils.answer(message, self.tr("confidential_text").format(named))
             return
 
         cfg = {
-            "text": self.strings("confidential").format(named),
+            "text": self.tr("confidential").format(named),
             "reply_markup": [
                 [
                     {
                         "text": "📤 Send anyway",
                         "callback": self.logscmd,
                         "args": [True, lvl],
+                        "style": "primary",
                     },
-                    {"text": "🚫 Cancel", "callback": self.cancel},
+                    {"text": "🚫 Cancel", "callback": self.cancel, "style": "danger"},
                 ]
             ],
         }
@@ -195,17 +197,17 @@ class TestMod(loader.Module):
             else:
                 await message.edit(**cfg)
         except ChatSendInlineForbiddenError:
-            await utils.answer(message, self.strings("confidential_text").format(named))
+            await utils.answer(message, self.tr("confidential_text").format(named))
 
     async def _send_logs(self, message, lvl: int, named) -> None:
         joined = "\n\n".join(
-            "\n".join(handler.dumps(lvl))
+            "\n".join(getattr(handler, "dumps")(lvl))
             for handler in logging.getLogger().handlers
             if hasattr(handler, "dumps")
         )
 
         if not joined.strip():
-            text = self.strings("no_logs").format(named)
+            text = self.tr("no_logs").format(named)
             if isinstance(message, Message):
                 await utils.answer(message, text)
             else:
@@ -214,8 +216,8 @@ class TestMod(loader.Module):
             return
 
         buf = BytesIO(joined.encode("utf-16"))
-        buf.name = self.strings("logs_filename")
-        caption = self.strings("logs_caption").format(named)
+        buf.name = self.tr("logs_filename")
+        caption = self.tr("logs_caption").format(named)
 
         if isinstance(message, Message):
             await utils.answer(message, buf, caption=caption)
@@ -241,13 +243,13 @@ class TestMod(loader.Module):
         if not isinstance(lvl, int):
             # Bad explicit arg → tell the user; no arg → show picker.
             if isinstance(message, Message) and utils.get_args_raw(message):
-                await utils.answer(message, self.strings("loglevel_invalid"))
+                await utils.answer(message, self.tr("loglevel_invalid"))
                 return
             await self._prompt_level(message, callback=self.setloglevelcmd, extra=())
             return
 
         await self._apply_loglevel(lvl)
-        text = self.strings("loglevel_set").format(_level_name(lvl))
+        text = self.tr("loglevel_set").format(_level_name(lvl))
         if isinstance(message, Message):
             await utils.answer(message, text)
         else:
@@ -262,10 +264,10 @@ class TestMod(loader.Module):
         try:
             seconds = float(utils.get_args_raw(message))
         except ValueError:
-            await utils.answer(message, self.strings("suspend_invalid_time", message))
+            await utils.answer(message, self.tr("suspend_invalid_time", message))
             return
 
-        await utils.answer(message, self.strings("suspended", message).format(seconds))
+        await utils.answer(message, self.tr("suspended", message).format(seconds))
         # asyncio.sleep so we don't block the event loop and freeze every
         # other client / handler attached to the same loop.
         await asyncio.sleep(seconds)
@@ -273,9 +275,7 @@ class TestMod(loader.Module):
     async def pingcmd(self, message: Message) -> None:
         """Test your userbot ping"""
         start = time.perf_counter_ns()
-        message = await utils.answer(message, "<code>Ping checking...</code>")
+        msgs = await utils.answer(message, "<code>Ping checking...</code>")
         end = time.perf_counter_ns()
-        if isinstance(message, (list, tuple)):
-            message = message[0]
         ms = (end - start) * 0.000001
-        await utils.answer(message, self.strings("results_ping").format(round(ms, 3)))
+        await utils.answer(msgs, self.tr("results_ping").format(round(ms, 3)))

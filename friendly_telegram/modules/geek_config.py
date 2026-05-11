@@ -10,19 +10,21 @@ Licensed under the GNU GPLv3
 
 import ast
 import logging
-from typing import Iterator, Union
+from typing import Iterator, List, Sequence, TypeVar, Union
 
-from telethon.tl.types import Message
+from telethon.tl.custom import Message
 
 from .. import loader, utils
 from ..inline.types import InlineCall
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
 
-def chunks(lst: Union[list, tuple, set], n: int) -> Iterator[list]:
+
+def chunks(lst: Sequence[T], n: int) -> Iterator[List[T]]:
     for i in range(0, len(lst), n):
-        yield lst[i : i + n]
+        yield list(lst[i : i + n])
 
 
 blacklist = [
@@ -58,7 +60,7 @@ class GeekConfigMod(loader.Module):
 
     def _find_module(self, name: str):
         return next(
-            (m for m in self.allmodules.modules if m.strings("name") == name),
+            (m for m in self.allmodules.modules if m.tr("name") == name),
             None,
         )
 
@@ -98,7 +100,7 @@ class GeekConfigMod(loader.Module):
             display = query
 
         await call.edit(
-            self.strings("option_saved").format(
+            self.tr("option_saved").format(
                 utils.escape_html(option),
                 utils.escape_html(mod),
                 utils.escape_html(str(display)),
@@ -110,7 +112,11 @@ class GeekConfigMod(loader.Module):
                         "callback": self.inline__configure,
                         "args": (mod,),
                     },
-                    {"text": "🚫 Close", "callback": self.inline__close},
+                    {
+                        "text": "🚫 Close",
+                        "callback": self.inline__close,
+                        "style": "danger",
+                    },
                 ]
             ],
             inline_message_id=inline_message_id,
@@ -123,7 +129,7 @@ class GeekConfigMod(loader.Module):
         if module is None:
             return
         await call.edit(
-            self.strings("configuring_option").format(
+            self.tr("configuring_option").format(
                 utils.escape_html(config_opt),
                 utils.escape_html(mod),
                 utils.escape_html(module.config.getdoc(config_opt)),
@@ -137,6 +143,7 @@ class GeekConfigMod(loader.Module):
                         "input": "✍️ Enter new configuration value for this option",  # noqa: E501
                         "handler": self.inline__set_config,
                         "args": (mod, config_opt, call.inline_message_id),
+                        "style": "primary",
                     }
                 ],
                 [
@@ -145,7 +152,11 @@ class GeekConfigMod(loader.Module):
                         "callback": self.inline__configure,
                         "args": (mod,),
                     },
-                    {"text": "🚫 Close", "callback": self.inline__close},
+                    {
+                        "text": "🚫 Close",
+                        "callback": self.inline__close,
+                        "style": "danger",
+                    },
                 ],
             ],
         )
@@ -166,12 +177,16 @@ class GeekConfigMod(loader.Module):
         )
 
         await call.edit(
-            self.strings("configuring_mod").format(utils.escape_html(mod)),
+            self.tr("configuring_mod").format(utils.escape_html(mod)),
             reply_markup=list(chunks(btns, 2))
             + [
                 [
                     {"text": "👈 Back", "callback": self.inline__global_config},
-                    {"text": "🚫 Close", "callback": self.inline__close},
+                    {
+                        "text": "🚫 Close",
+                        "callback": self.inline__close,
+                        "style": "danger",
+                    },
                 ]
             ],
         )
@@ -180,9 +195,9 @@ class GeekConfigMod(loader.Module):
         self, call: Union[Message, InlineCall]
     ) -> None:  # noqa
         to_config = [
-            mod.strings("name")
+            mod.tr("name")
             for mod in self.allmodules.modules
-            if hasattr(mod, "config") and mod.strings("name") not in blacklist
+            if hasattr(mod, "config") and mod.tr("name") not in blacklist
         ]
         kb = [
             [
@@ -194,11 +209,9 @@ class GeekConfigMod(loader.Module):
         kb += [[{"text": "🚫 Close", "callback": self.inline__close}]]
 
         if isinstance(call, Message):
-            await self.inline.form(
-                self.strings("configure"), reply_markup=kb, message=call
-            )
+            await self.inline.form(self.tr("configure"), reply_markup=kb, message=call)
         else:
-            await call.edit(self.strings("configure"), reply_markup=kb)
+            await call.edit(self.tr("configure"), reply_markup=kb)
 
     async def configcmd(self, message: Message) -> None:
         """Configure modules"""

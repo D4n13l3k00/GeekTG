@@ -27,6 +27,7 @@ import os
 import string
 import sys
 import time
+from typing import Any, Dict, Optional
 
 from dialog import Dialog, ExecutableNotFound
 
@@ -132,8 +133,8 @@ if sys.stdout.isatty():
 else:
     DIALOG = TDialog()
 
-MODULES = None
-DB = None  # eww... meh.
+MODULES: Any = None
+DB: Optional[Dict[str, Any]] = None  # eww... meh.
 
 
 # pylint: disable=W0603
@@ -177,7 +178,7 @@ def module_config(mod):
 
     if code == DIALOG.OK:
         code, value = DIALOG.inputbox(tag)
-        if code == DIALOG.OK:
+        if code == DIALOG.OK and DB is not None:
             DB.setdefault(mod.__module__, {}).setdefault("__config__", {})[tag] = (
                 validate_value(value)
             )
@@ -202,22 +203,23 @@ def run(database, data_root, phone, init, mods):
 def api_config(data_root):
     """Request API config from user and set"""
     code, hash_value = DIALOG.inputbox("Enter your API Hash")
-    if code == DIALOG.OK:
-        if len(hash_value) != 32 or any(
-            it not in string.hexdigits for it in hash_value
-        ):
-            DIALOG.msgbox("Invalid hash")
-            return
-        code, id_value = DIALOG.inputbox("Enter your API ID")
-        if not id_value or any(it not in string.digits for it in id_value):
-            DIALOG.msgbox("Invalid ID")
-            return
-        with open(
-            os.path.join(data_root or utils.get_data_dir(), "api_token.txt"),
-            "w",
-        ) as file:
-            file.write(id_value + "\n" + hash_value)
-        DIALOG.msgbox("API Token and ID set.")
+    if code != DIALOG.OK or not isinstance(hash_value, str):
+        return
+    if len(hash_value) != 32 or any(it not in string.hexdigits for it in hash_value):
+        DIALOG.msgbox("Invalid hash")
+        return
+    code, id_value = DIALOG.inputbox("Enter your API ID")
+    if not isinstance(id_value, str):
+        return
+    if not id_value or any(it not in string.digits for it in id_value):
+        DIALOG.msgbox("Invalid ID")
+        return
+    with open(
+        os.path.join(data_root or utils.get_data_dir(), "api_token.txt"),
+        "w",
+    ) as file:
+        file.write(id_value + "\n" + hash_value)
+    DIALOG.msgbox("API Token and ID set.")
 
 
 def logging_config():
@@ -233,7 +235,7 @@ def logging_config():
             ("0", "ALL"),
         ],
     )
-    if code == DIALOG.OK:
+    if code == DIALOG.OK and isinstance(tag, str) and DB is not None:
         DB.setdefault(main.__name__, {})["loglevel"] = int(tag)
 
 

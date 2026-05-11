@@ -17,9 +17,10 @@
 #    Modded by GeekTG Team
 
 import os
+from typing import Optional, Union
 
-import telethon
-from telethon.tl.types import Message
+from telethon.tl.custom import Message
+from telethon.tl.types import Channel
 
 from .. import loader, main, utils
 
@@ -79,15 +80,15 @@ class CoreMod(loader.Module):
         ),
     }
 
-    async def blacklistcommon(self, message: Message) -> None:
+    async def blacklistcommon(self, message: Message) -> Optional[Union[int, str]]:
         args = utils.get_args(message)
 
         if len(args) > 2:
-            await utils.answer(message, self.strings("too_many_args", message))
-            return
+            await utils.answer(message, self.tr("too_many_args", message))
+            return None
 
-        chatid = None
-        module = None
+        chatid: Optional[int] = None
+        module: Optional[str] = None
 
         if args:
             try:
@@ -102,11 +103,11 @@ class CoreMod(loader.Module):
             chatid = utils.get_chat_id(message)
 
         module = self.allmodules.get_classname(module)
-        return f"{str(chatid)}.{module}" if module else chatid
+        return f"{chatid}.{module}" if module else chatid
 
     async def ftgvercmd(self, message: Message) -> None:
         """Get GeekTG version"""
-        ver = getattr(main, "__version__", False)
+        ver = getattr(main, "__version__", None) or (0, 0, 0)
 
         try:
             branch = (
@@ -123,7 +124,7 @@ class CoreMod(loader.Module):
             key = "geek_alpha"
         else:
             key = "geek"
-        await utils.answer(message, self.strings(key).format(*ver))
+        await utils.answer(message, self.tr(key).format(*ver))
 
     async def blacklistcmd(self, message: Message) -> None:
         """.blacklist [id]
@@ -136,7 +137,7 @@ class CoreMod(loader.Module):
             self.ctx.db.get(main.__name__, "blacklist_chats", []) + [chatid],
         )
 
-        await utils.answer(message, self.strings("blacklisted", message).format(chatid))
+        await utils.answer(message, self.tr("blacklisted", message).format(chatid))
 
     async def unblacklistcmd(self, message: Message) -> None:
         """.unblacklist [id]
@@ -149,21 +150,22 @@ class CoreMod(loader.Module):
             list(set(self.ctx.db.get(main.__name__, "blacklist_chats", [])) - {chatid}),
         )
 
-        await utils.answer(
-            message, self.strings("unblacklisted", message).format(chatid)
-        )
+        await utils.answer(message, self.tr("unblacklisted", message).format(chatid))
 
-    async def getuser(self, message: Message) -> None:
+    async def getuser(self, message: Message) -> Optional[int]:
         try:
-            return int(utils.get_args(message)[0])
+            return int((utils.get_args(message))[0])
         except (ValueError, IndexError):
             reply = await message.get_reply_message()
             if reply:
                 return reply.sender_id
             if message.is_private:
-                return message.to_id.user_id
-            await utils.answer(message, self.strings("who_to_unblacklist", message))
-            return
+                to_id = getattr(message, "to_id", None)
+                user_id = getattr(to_id, "user_id", None)
+                if user_id is not None:
+                    return user_id
+            await utils.answer(message, self.tr("who_to_unblacklist", message))
+            return None
 
     async def blacklistusercmd(self, message: Message) -> None:
         """.blacklistuser [id]
@@ -176,9 +178,7 @@ class CoreMod(loader.Module):
             self.ctx.db.get(main.__name__, "blacklist_users", []) + [user],
         )
 
-        await utils.answer(
-            message, self.strings("user_blacklisted", message).format(user)
-        )
+        await utils.answer(message, self.tr("user_blacklisted", message).format(user))
 
     async def unblacklistusercmd(self, message: Message) -> None:
         """.unblacklistuser [id]
@@ -191,9 +191,7 @@ class CoreMod(loader.Module):
             list(set(self.ctx.db.get(main.__name__, "blacklist_users", [])) - {user}),
         )
 
-        await utils.answer(
-            message, self.strings("user_unblacklisted", message).format(user)
-        )
+        await utils.answer(message, self.tr("user_unblacklisted", message).format(user))
 
     @loader.owner
     async def setprefixcmd(self, message: Message) -> None:
@@ -201,11 +199,11 @@ class CoreMod(loader.Module):
         args = utils.get_args_raw(message)
 
         if not args:
-            await utils.answer(message, self.strings("what_prefix", message))
+            await utils.answer(message, self.tr("what_prefix", message))
             return
 
         if len(args) != 1:
-            await utils.answer(message, self.strings("prefix_incorrect", message))
+            await utils.answer(message, self.tr("prefix_incorrect", message))
             return
 
         oldprefix = self.ctx.db.get(main.__name__, "command_prefix", ".")
@@ -214,7 +212,7 @@ class CoreMod(loader.Module):
         self.ctx.db.set(main.__name__, "command_prefix", args[0])
         await utils.answer(
             message,
-            self.strings("prefix_set", message).format(
+            self.tr("prefix_set", message).format(
                 newprefix=utils.escape_html(args[0]),
                 oldprefix=utils.escape_html(oldprefix),
             ),
@@ -228,7 +226,7 @@ class CoreMod(loader.Module):
             f"\n{utils.escape_html(k)}: {utils.escape_html(v)}"
             for k, v in aliases.items()
         )
-        await utils.answer(message, self.strings("aliases", message) + body)
+        await utils.answer(message, self.tr("aliases", message) + body)
 
     @loader.owner
     async def addaliascmd(self, message: Message) -> None:
@@ -236,7 +234,7 @@ class CoreMod(loader.Module):
         args = utils.get_args(message)
 
         if len(args) != 2:
-            await utils.answer(message, self.strings("alias_args", message))
+            await utils.answer(message, self.tr("alias_args", message))
             return
 
         alias, cmd = args
@@ -248,12 +246,12 @@ class CoreMod(loader.Module):
             self.ctx.db.set(__name__, "aliases", current)
             await utils.answer(
                 message,
-                self.strings("alias_created", message).format(utils.escape_html(alias)),
+                self.tr("alias_created", message).format(utils.escape_html(alias)),
             )
         else:
             await utils.answer(
                 message,
-                self.strings("no_command", message).format(utils.escape_html(cmd)),
+                self.tr("no_command", message).format(utils.escape_html(cmd)),
             )
 
     @loader.owner
@@ -262,7 +260,7 @@ class CoreMod(loader.Module):
         args = utils.get_args(message)
 
         if len(args) != 1:
-            await utils.answer(message, self.strings("delalias_args", message))
+            await utils.answer(message, self.tr("delalias_args", message))
             return
 
         alias = args[0]
@@ -274,12 +272,12 @@ class CoreMod(loader.Module):
             self.ctx.db.set(__name__, "aliases", current)
             await utils.answer(
                 message,
-                self.strings("alias_removed", message).format(utils.escape_html(alias)),
+                self.tr("alias_removed", message).format(utils.escape_html(alias)),
             )
         else:
             await utils.answer(
                 message,
-                self.strings("no_alias", message).format(utils.escape_html(alias)),
+                self.tr("no_alias", message).format(utils.escape_html(alias)),
             )
 
     async def addtrnslcmd(self, message: Message) -> None:
@@ -289,7 +287,7 @@ class CoreMod(loader.Module):
         args = utils.get_args(message)
 
         if len(args) != 1:
-            await utils.answer(message, self.strings("no_pack", message))
+            await utils.answer(message, self.tr("no_pack", message))
             return
 
         pack = args[0]
@@ -299,22 +297,22 @@ class CoreMod(loader.Module):
         try:
             pack = await self.ctx.client.get_entity(pack)
         except ValueError:
-            await utils.answer(message, self.strings("bad_pack", message))
+            await utils.answer(message, self.tr("bad_pack", message))
             return
 
-        if isinstance(pack, telethon.tl.types.Channel) and not pack.megagroup:
+        if isinstance(pack, Channel) and not pack.megagroup:
             self.ctx.db.setdefault(main.__name__, {}).setdefault(
                 "langpacks", []
             ).append(pack.id)
             self.ctx.db.save()
-            await utils.answer(message, self.strings("trnsl_saved", message))
+            await utils.answer(message, self.tr("trnsl_saved", message))
         else:
-            await utils.answer(message, self.strings("bad_pack", message))
+            await utils.answer(message, self.tr("bad_pack", message))
 
     async def cleartrnslcmd(self, message: Message) -> None:
         """Remove all translation packs"""
         self.ctx.db.set(main.__name__, "langpacks", [])
-        await utils.answer(message, self.strings("packs_cleared", message))
+        await utils.answer(message, self.tr("packs_cleared", message))
 
     async def setlangcmd(self, message: Message) -> None:
         """Change the preferred language used for translations
@@ -324,14 +322,14 @@ class CoreMod(loader.Module):
         Restart required after use"""
         langs = utils.get_args(message)
         self.ctx.db.set(main.__name__, "language", langs)
-        await utils.answer(message, self.strings("lang_set", message))
+        await utils.answer(message, self.tr("lang_set", message))
 
     @loader.owner
     async def cleardbcmd(self, message: Message) -> None:
         """Clears the entire database, effectively performing a factory reset"""
         self.ctx.db.clear()
         self.ctx.db.save()
-        await utils.answer(message, self.strings("db_cleared", message))
+        await utils.answer(message, self.tr("db_cleared", message))
 
     async def _client_ready2(self, client, db):  # skicpq: PYL-W0613
         ret = {

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "friendly-telegram"
-version = "4.1.4"
+version = "4.3.1"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
@@ -65,6 +65,13 @@ dev = [
     "ruff>=0.9",
     "black>=25",
     "isort>=6",
+]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
+    "mkdocs-static-i18n>=1.2",
+    "black>=25",
 ]
 
 [tool.black]

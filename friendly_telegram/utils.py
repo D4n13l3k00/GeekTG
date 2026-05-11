@@ -27,6 +27,7 @@ import random
 import shlex
 import socket
 import string
+from typing import Any, List, Optional, Union, cast
 
 import telethon
 from telethon.tl.custom.message import Message
@@ -41,8 +42,13 @@ from telethon.tl.types import (
 
 from . import __version__
 
+#: ``answer()`` accepts either a single Telethon ``Message`` or a list whose
+#: head is the message we should reply to / edit and whose tail is messages
+#: to delete first (used by progress flows).
+MessageLike = Union[Message, List[Message]]
 
-def get_platform_name():
+
+def get_platform_name() -> str:
     """Return the platform display name.
 
     Resolution order:
@@ -68,50 +74,47 @@ def get_platform_name():
     return "📻 VDS"
 
 
-def get_args(message):
-    """Get arguments from message (str or Message), return list of arguments"""
-    try:
-        message = message.message
-    except AttributeError:
-        pass
+def get_args(message: Union[Message, str]) -> List[str]:
+    """Get arguments as a list of strings (shell-split).
 
-    if not message:
-        return False
-
-    message = message.split(maxsplit=1)
-
-    if len(message) <= 1:
+    Always returns a list. Empty input → ``[]``. Malformed quoting →
+    a single-element list with the raw post-command tail (so callers
+    can still index/len without crashing).
+    """
+    raw = message if isinstance(message, str) else getattr(message, "message", "")
+    if not raw:
         return []
 
-    message = message[1]
+    parts = raw.split(maxsplit=1)
+    if len(parts) <= 1:
+        return []
+    tail = parts[1]
 
     try:
-        split = shlex.split(message)
+        split = shlex.split(tail)
     except ValueError:
-        return message  # Cannot split, let's assume that it's just one long message
-
-    return list(filter(lambda x: len(x) > 0, split))
-
-
-def get_args_raw(message):
-    """Get the parameters to the command as a raw string (not split)"""
-    try:
-        message = message.message
-    except AttributeError:
-        pass
-
-    if not message:
-        return False
-
-    args = message.split(maxsplit=1)
-
-    if len(args) > 1:
-        return args[1]
-
-    return ""
+        # Cannot split (e.g. unclosed quote) — give callers something
+        # they can still index into. Old behaviour returned the raw
+        # string, breaking ``len()`` for any caller doing arity checks.
+        return [tail]
+    return [token for token in split if token]
 
 
-def get_args_split_by(message, sep):
+def get_args_raw(message: Union[Message, str]) -> str:
+    """Get the parameters to the command as a raw string (not split).
+
+    Returns ``""`` when there are no args (or the message itself is
+    empty), never ``False`` — callers can safely call ``.strip()``,
+    ``.split(...)`` etc. without a None-guard.
+    """
+    raw = message if isinstance(message, str) else getattr(message, "message", "")
+    if not raw:
+        return ""
+    parts = raw.split(maxsplit=1)
+    return parts[1] if len(parts) > 1 else ""
+
+
+def get_args_split_by(message: Union[Message, str], sep: str) -> List[str]:
     """Split args by ``sep``, strip each section, drop blanks.
 
     The ``if section`` filter previously ran *before* the strip so a
@@ -119,31 +122,38 @@ def get_args_split_by(message, sep):
     as an empty string in the output. Filter post-strip so callers can
     rely on "no blanks" actually meaning that.
     """
-    raw = get_args_raw(message)
-    return [stripped for section in raw.split(sep) if (stripped := section.strip())]
+    return [
+        stripped
+        for section in get_args_raw(message).split(sep)
+        if (stripped := section.strip())
+    ]
 
 
-def get_chat_id(message):
-    """Get the chat ID, but without -100 if its a channel"""
-    return telethon.utils.resolve_id(message.chat_id)[0]
+def get_chat_id(message: Message) -> int:
+    """Get the chat ID, but without -100 if its a channel."""
+    resolved = telethon.utils.resolve_id(message.chat_id)[0]
+    return int(resolved or 0)
 
 
-def rand(length):
-    """Generate a random string of given length"""
+def rand(length: int) -> str:
+    """Generate a random string of given length."""
     return "".join(
-        [random.choice(string.ascii_letters + string.digits) for _ in range(length)]
+        random.choice(string.ascii_letters + string.digits) for _ in range(length)
     )
 
 
-def get_version_raw():
-    """Get the version of the userbot"""
+def get_version_raw() -> str:
+    """Get the version of the userbot."""
     return ".".join(map(str, __version__))
 
 
-def get_git_info():
-    # Lazy import: ``gitpython`` is only needed for the startup banner /
-    # ``.info`` and is a meaningful chunk of import time. Wheel/Docker
-    # installs don't have ``.git`` anyway and end up in the except path.
+def get_git_info() -> List[str]:
+    """``[short_sha_or_empty, github_url_or_empty]``.
+
+    Lazy GitPython import (only used by the startup banner / ``.info``).
+    Wheel/Docker installs don't carry ``.git`` and end up in the except
+    branch with ``["", ""]``.
+    """
     try:
         import git
 
@@ -157,21 +167,21 @@ def get_git_info():
     ]
 
 
-def get_entity_id(entity):
+def get_entity_id(entity: Any) -> int:
     return telethon.utils.get_peer_id(entity)
 
 
-def escape_html(text):
-    """Pass all untrusted/potentially corrupt input here"""
+def escape_html(text: Any) -> str:
+    """Pass all untrusted/potentially corrupt input here."""
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def escape_quotes(text):
-    """Escape quotes to html quotes"""
+def escape_quotes(text: Any) -> str:
+    """Escape quotes to html quotes."""
     return escape_html(text).replace('"', "&quot;")
 
 
-def get_base_dir():
+def get_base_dir() -> str:
     """Return the installed package directory.
 
     ``utils`` lives at ``friendly_telegram/utils.py``, so its parent dir is
@@ -181,13 +191,13 @@ def get_base_dir():
     return os.path.abspath(os.path.dirname(__file__))
 
 
-def get_dir(mod):
-    """Get directory of given module"""
+def get_dir(mod: str) -> str:
+    """Get directory of given module file path."""
     return os.path.abspath(os.path.dirname(os.path.abspath(mod)))
 
 
 @functools.lru_cache(maxsize=1)
-def get_data_dir():
+def get_data_dir() -> str:
     """Return user-writable data directory for sessions, config and modules.
 
     Resolution order:
@@ -211,7 +221,7 @@ def get_data_dir():
     return path
 
 
-def _local_ips():
+def _local_ips() -> List[str]:
     """Return a sorted list of routable local IPs (IPv4 + IPv6, no loopback)."""
     ips = set()
     try:
@@ -552,7 +562,7 @@ def relocate_entities(entities, offset, text=None):
     return entities
 
 
-async def answer(message, response, **kwargs):
+async def answer(message, response, **kwargs) -> List[Message]:
     """Use this to give the response to a command"""
     if isinstance(message, list):
         delete_job = asyncio.ensure_future(
@@ -582,9 +592,10 @@ async def answer(message, response, **kwargs):
     parse_mode = telethon.utils.sanitize_parse_mode(
         kwargs.pop("parse_mode", message.client.parse_mode)
     )
+    assert parse_mode is not None  # sanitize_parse_mode raises if it can't resolve
 
     if isinstance(response, str) and not kwargs.pop("asfile", False):
-        txt, ent = parse_mode.parse(response)
+        txt, ent = parse_mode.parse(response)  # type: ignore[attr-defined]
 
         if len(txt) >= 4096:
             file = io.BytesIO(txt.encode("utf-8"))
@@ -639,6 +650,17 @@ async def answer(message, response, **kwargs):
                 getattr(message, "reply_to_msg_id", None),
             )
             ret = (await message.client.send_file(message.chat_id, response, **kwargs),)
+            # send_file can't replace the original message — if we're
+            # answering our own command, the command would otherwise linger
+            # in the chat. Mirror the long-text branch above and delete it.
+            if edit:
+                try:
+                    await message.delete()
+                except Exception:
+                    logging.debug(
+                        "answer(): couldn't delete source command",
+                        exc_info=True,
+                    )
 
     if delete_job:
         await delete_job
@@ -646,32 +668,36 @@ async def answer(message, response, **kwargs):
     return ret
 
 
-async def get_target(message, arg_no=0):
-    if any(
-        isinstance(ent, MessageEntityMentionName) for ent in (message.entities or [])
-    ):
+async def get_target(message: Message, arg_no: int = 0) -> Optional[int]:
+    entities = message.entities or []
+    if any(isinstance(ent, MessageEntityMentionName) for ent in entities):
         e = sorted(
-            filter(lambda x: isinstance(x, MessageEntityMentionName), message.entities),
+            (ent for ent in entities if isinstance(ent, MessageEntityMentionName)),
             key=lambda x: x.offset,
         )[0]
         return e.user_id
 
-    if len(get_args(message)) > arg_no:
-        user = get_args(message)[arg_no]
+    args = get_args(message)
+    if len(args) > arg_no:
+        user: Union[int, str] = args[arg_no]
     elif message.is_reply:
-        return (await message.get_reply_message()).sender_id
+        reply = await message.get_reply_message()
+        return reply.sender_id if reply else None
     elif hasattr(message.peer_id, "user_id"):
-        user = message.peer_id.user_id
+        user = cast(int, getattr(message.peer_id, "user_id"))
     else:
         return None
 
+    client = message.client
+    if client is None:
+        return None
     try:
-        ent = await message.client.get_entity(user)
+        ent = await client.get_entity(user)
     except ValueError:
         return None
-    else:
-        if isinstance(ent, User):
-            return ent.id
+    if isinstance(ent, User):
+        return ent.id
+    return None
 
 
 def merge(a, b):

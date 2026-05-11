@@ -9,6 +9,8 @@ We pin the values to a current real-world flagship: Pixel 10 Pro XL on
 Android 16 (API 36). Bumping these is safe; just keep them plausible.
 """
 
+from typing import Any, Dict
+
 # What Active Sessions calls the device.
 DEVICE_MODEL = "Google Pixel 10 Pro XL"
 
@@ -27,7 +29,7 @@ LANG_CODE = "en"
 SYSTEM_LANG_CODE = "en-US"
 
 
-def telethon_kwargs():
+def telethon_kwargs() -> Dict[str, Any]:
     """Return the kwargs dict to splat into ``TelegramClient(**...)``."""
     return {
         "device_model": DEVICE_MODEL,

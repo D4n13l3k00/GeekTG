@@ -112,7 +112,7 @@ class RootRouter:
         """
         return web.Response(text="ok")
 
-    async def restart(self, request):
+    async def restart(self, request) -> web.Response:
         # Invalidate caches so the post-restart UI fetches fresh data.
         self.ctx.me_cache = None
         self.ctx.avatar_cache = None
@@ -121,3 +121,6 @@ class RootRouter:
         for mod in loader.modules:
             if mod.__class__.__name__ == "UpdaterMod":
                 await mod.restart_common(m)
+        # The process is about to exec away — clients usually never see this
+        # response, but aiohttp requires handlers to return a StreamResponse.
+        return web.Response(status=202)

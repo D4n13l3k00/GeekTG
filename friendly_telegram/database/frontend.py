@@ -17,6 +17,7 @@
 import asyncio
 import json
 import logging
+from typing import Optional
 
 
 class NotifyingFuture(asyncio.Future):
@@ -39,7 +40,7 @@ class Database(dict):
         self._pending = None
         self._loading = True
         self._waiter = asyncio.Event()
-        self._sync_future = None
+        self._sync_future: Optional["NotifyingFuture"] = None
         # We use a future because we need
         # await-ability and we will be delaying by 10s, but
         # because we are gonna frequently be changing the data,
@@ -118,6 +119,9 @@ class Database(dict):
         # Restart the task, but without the delay, because someone is waiting for us
 
     async def _set(self):
+        # ``_set`` is only ever scheduled from ``set()`` after a fresh
+        # ``_sync_future`` is allocated; the assert documents that contract.
+        assert self._sync_future is not None
         if self._noop:
             self._sync_future.set_result(True)
             return

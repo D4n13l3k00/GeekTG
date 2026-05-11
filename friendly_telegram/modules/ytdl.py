@@ -13,12 +13,12 @@ import functools
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
+from telethon.tl.custom import Message
 from telethon.tl.types import (
     DocumentAttributeAudio,
     DocumentAttributeVideo,
-    Message,
 )
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import (
@@ -50,15 +50,16 @@ _AUDIO_PRESETS = [
     ("320 kbps", "320"),
 ]
 
-_QUIET_OPTS = {
+_QUIET_OPTS: Dict[str, Any] = {
     "quiet": True,
     "no_warnings": True,
     "logtostderr": False,
     "noprogress": True,
+    "color": "never",
 }
 
 
-def _probe_opts() -> dict:
+def _probe_opts() -> Dict[str, Any]:
     return {
         **_QUIET_OPTS,
         "skip_download": True,
@@ -67,7 +68,7 @@ def _probe_opts() -> dict:
     }
 
 
-def _video_opts(fmt: str) -> dict:
+def _video_opts(fmt: str) -> Dict[str, Any]:
     return {
         **_QUIET_OPTS,
         "format": fmt,
@@ -82,7 +83,7 @@ def _video_opts(fmt: str) -> dict:
     }
 
 
-def _audio_opts(quality: str = "320", fmt_id: Optional[str] = None) -> dict:
+def _audio_opts(quality: str = "320", fmt_id: Optional[str] = None) -> Dict[str, Any]:
     return {
         **_QUIET_OPTS,
         "format": fmt_id or "bestaudio",
@@ -203,6 +204,11 @@ def _classify_formats(info: dict) -> Tuple[List[dict], List[dict]]:
     return videos, audios
 
 
+def _first(msgs: Union[Message, List[Message]]) -> Message:
+    """Normalise utils.answer's List[Message] return down to a single Message."""
+    return msgs[0] if isinstance(msgs, list) else msgs
+
+
 @loader.tds
 class YtDlMod(loader.Module):
     """Youtube-Dl Module"""
@@ -260,15 +266,16 @@ class YtDlMod(loader.Module):
     async def _show_error(self, m: Message, key: str, *args) -> None:
         """Print an error and leave it on screen. Don't auto-delete — the
         user needs to *see* what went wrong."""
-        await utils.answer(m, self.strings(key, m).format(*args))
+        await utils.answer(m, self.tr(key, m).format(*args))
 
     # --------------------------------------------------------------- commands
 
     @loader.owner
-    async def swripcmd(self, m: Message):
+    async def swripcmd(self, m: Message) -> None:
         "Switch autodownload in the chat"
-        if not m.chat:
-            return await utils.answer(m, self.strings("not_chat"))
+        if not m.chat or m.chat_id is None:
+            await utils.answer(m, self.tr("not_chat"))
+            return
         chats = self._chats()
         if m.chat_id in chats:
             chats.remove(m.chat_id)
@@ -277,37 +284,38 @@ class YtDlMod(loader.Module):
             chats.append(m.chat_id)
             is_on = True
         self._save_chats(chats)
-        await utils.answer(m, self.strings("switch").format("ON" if is_on else "OFF"))
+        await utils.answer(m, self.tr("switch").format("ON" if is_on else "OFF"))
 
     @loader.owner
-    async def ripvcmd(self, m: Message):
+    async def ripvcmd(self, m: Message) -> None:
         """.ripv <link / reply_to_link> - download video (best quality)"""
         url = await self._resolve_url(m, is_watcher=False)
         if not url:
-            return await utils.answer(m, self.strings("noargs", m))
+            await utils.answer(m, self.tr("noargs", m))
+            return
         await self._download_video(m, url, "best", reply=await m.get_reply_message())
 
     @loader.owner
-    async def ripacmd(self, m: Message):
+    async def ripacmd(self, m: Message) -> None:
         """.ripa <link / reply_to_link> - download audio (mp3 320k)"""
         url = await self._resolve_url(m, is_watcher=False)
         if not url:
-            return await utils.answer(m, self.strings("noargs", m))
+            await utils.answer(m, self.tr("noargs", m))
+            return
         await self._download_audio(m, url, "320", reply=await m.get_reply_message())
 
     @loader.owner
-    async def ytdlcmd(self, m: Message):
+    async def ytdlcmd(self, m: Message) -> None:
         """.ytdl <link / reply_to_link> - probe formats and pick via inline buttons"""
         url = await self._resolve_url(m, is_watcher=False)
         if not url:
-            return await utils.answer(m, self.strings("noargs", m))
+            await utils.answer(m, self.tr("noargs", m))
+            return
 
         reply = await m.get_reply_message()
         reply_id = reply.id if reply else None
 
-        progress = await utils.answer(m, self.strings("probing"))
-        if isinstance(progress, list):
-            progress = progress[0]
+        progress = _first(await utils.answer(m, self.tr("probing")))
 
         info = await self._probe(progress, url)
         if info is None:
@@ -316,7 +324,8 @@ class YtDlMod(loader.Module):
 
         videos, audios = _classify_formats(info)
         if not videos and not audios:
-            return await utils.answer(progress, self.strings("no_formats"))
+            await utils.answer(progress, self.tr("no_formats"))
+            return
 
         # Stash so the inline callbacks (which only carry args) can find it.
         token = info.get("id") or os.urandom(8).hex()
@@ -343,7 +352,7 @@ class YtDlMod(loader.Module):
         if len(display_url) > 200:
             display_url = display_url[:197] + "..."
 
-        caption = self.strings("pick_kind").format(
+        caption = self.tr("pick_kind").format(
             title=title,
             uploader=uploader,
             duration=duration_str,
@@ -355,12 +364,13 @@ class YtDlMod(loader.Module):
         # We pass ``progress`` (already an out-message) so the form swap
         # happens cleanly without leaving an orphan "Probing..." behind.
         markup = self._kind_markup(token, reply_id, videos, audios)
-        thumb = info.get("thumbnail")
+        thumb_raw = info.get("thumbnail")
+        thumb: Optional[str] = thumb_raw if isinstance(thumb_raw, str) else None
         result = await self.inline.form(
             caption,
             message=progress,
             reply_markup=markup,
-            photo=thumb or None,
+            photo=thumb,
         )
         # Some sites hand out thumbnail URLs that BotAPI rejects (CDN auth,
         # bad cert, redirect, >5MB). Fall back to a text-only form so the
@@ -375,7 +385,7 @@ class YtDlMod(loader.Module):
             # inline.form already printed its own error onto ``progress``.
             self._cache.pop(token, None)
 
-    async def watcher(self, m: Message):
+    async def watcher(self, m: Message) -> None:
         if not isinstance(m, Message):
             return
         if m.chat_id in self._chats():
@@ -418,7 +428,9 @@ class YtDlMod(loader.Module):
                 }
             ]
         )
-        rows.append([{"text": "✖ Cancel", "callback": self._inline_cancel}])
+        rows.append(
+            [{"text": "✖ Cancel", "callback": self._inline_cancel, "style": "danger"}]
+        )
         return rows
 
     def _video_markup(
@@ -509,7 +521,7 @@ class YtDlMod(loader.Module):
         )
         with contextlib.suppress(Exception):
             await call.edit(
-                self.strings("pick_kind").format(
+                self.tr("pick_kind").format(
                     title=title,
                     uploader=uploader,
                     duration=duration_str,
@@ -530,7 +542,7 @@ class YtDlMod(loader.Module):
         title = utils.escape_html(entry["info"].get("title") or "Untitled")
         with contextlib.suppress(Exception):
             await call.edit(
-                self.strings("pick_video").format(title=title),
+                self.tr("pick_video").format(title=title),
                 reply_markup=self._video_markup(token, reply_id, entry["videos"]),
             )
 
@@ -544,7 +556,7 @@ class YtDlMod(loader.Module):
         title = utils.escape_html(entry["info"].get("title") or "Untitled")
         with contextlib.suppress(Exception):
             await call.edit(
-                self.strings("pick_audio").format(title=title),
+                self.tr("pick_audio").format(title=title),
                 reply_markup=self._audio_markup(token, reply_id, entry["audios"]),
             )
 
@@ -570,11 +582,15 @@ class YtDlMod(loader.Module):
         if not url:
             return
 
-        status = await self.ctx.client.send_message(chat, self.strings("preparing"))
-        reply = None
+        status = cast(
+            Message, await self.ctx.client.send_message(chat, self.tr("preparing"))
+        )
+        reply: Optional[Message] = None
         if reply_id is not None:
             with contextlib.suppress(Exception):
-                reply = await self.ctx.client.get_messages(chat, ids=reply_id)
+                fetched = await self.ctx.client.get_messages(chat, ids=reply_id)
+                if isinstance(fetched, Message):
+                    reply = fetched
 
         if kind == "video":
             # Pair the chosen video stream with the best audio so we always
@@ -615,9 +631,7 @@ class YtDlMod(loader.Module):
         already_prepared: bool = False,
     ) -> None:
         if not already_prepared:
-            m = await utils.answer(m, self.strings("preparing", m))
-            if isinstance(m, list):
-                m = m[0]
+            m = _first(await utils.answer(m, self.tr("preparing", m)))
         rip_data = await self._extract(m, url, _video_opts(fmt))
         if rip_data is None:
             return
@@ -633,9 +647,7 @@ class YtDlMod(loader.Module):
         already_prepared: bool = False,
     ) -> None:
         if not already_prepared:
-            m = await utils.answer(m, self.strings("preparing", m))
-            if isinstance(m, list):
-                m = m[0]
+            m = _first(await utils.answer(m, self.tr("preparing", m)))
         rip_data = await self._extract(m, url, _audio_opts(quality, fmt_id))
         if rip_data is None:
             return
@@ -645,7 +657,7 @@ class YtDlMod(loader.Module):
         self,
         m: Message,
         url: str,
-        opts: dict,
+        opts: Dict[str, Any],
         status_key: Optional[str] = "downloading",
     ) -> Optional[dict]:
         """Run yt-dlp's blocking extract_info off-thread.
@@ -657,11 +669,14 @@ class YtDlMod(loader.Module):
         loop = asyncio.get_event_loop()
         try:
             if status_key is not None:
-                await utils.answer(m, self.strings(status_key, m))
-            with YoutubeDL(opts) as rip:
-                return await loop.run_in_executor(
+                await utils.answer(m, self.tr(status_key, m))
+            # YoutubeDL accepts an arbitrary dict at runtime; its TypedDict
+            # signature is too narrow for our composed opts.
+            with YoutubeDL(cast(Any, opts)) as rip:
+                result = await loop.run_in_executor(
                     None, functools.partial(rip.extract_info, url)
                 )
+                return cast(Optional[dict], result)
         except DownloadError as e:
             await self._show_error(m, "err", str(e))
         except ContentTooShortError:
@@ -690,7 +705,8 @@ class YtDlMod(loader.Module):
         candidates = [f"{rip_data['id']}.mp3.mp3", f"{rip_data['id']}.mp3"]
         path = next((p for p in candidates if os.path.exists(p)), None)
         if not path:
-            return await utils.answer(m, self.strings("err").format("file not found"))
+            await utils.answer(m, self.tr("err").format("file not found"))
+            return
 
         try:
             with open(path, "rb") as f:
@@ -698,7 +714,7 @@ class YtDlMod(loader.Module):
                     utils.get_chat_id(m),
                     f,
                     supports_streaming=True,
-                    reply_to=reply.id if reply else None,
+                    reply_to=reply.id if reply else 0,
                     attributes=(
                         DocumentAttributeAudio(
                             duration=int(rip_data.get("duration") or 0),
@@ -725,7 +741,8 @@ class YtDlMod(loader.Module):
             candidates.append(f"{rip_data['id']}.{ext}")
         path = next((p for p in candidates if os.path.exists(p)), None)
         if not path:
-            return await utils.answer(m, self.strings("err").format("file not found"))
+            await utils.answer(m, self.tr("err").format("file not found"))
+            return
 
         downloads = rip_data.get("requested_downloads") or [{}]
         try:
@@ -733,7 +750,7 @@ class YtDlMod(loader.Module):
                 await self.ctx.client.send_file(
                     utils.get_chat_id(m),
                     f,
-                    reply_to=reply.id if reply else None,
+                    reply_to=reply.id if reply else 0,
                     supports_streaming=True,
                     attributes=(
                         DocumentAttributeVideo(

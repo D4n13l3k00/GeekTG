@@ -10,8 +10,8 @@ Licensed under the GNU GPLv3
 
 import logging
 
-import aiogram
 import git
+from aiogram.types import InlineQueryResultPhoto
 from telethon.utils import get_display_name
 
 from .. import loader, utils
@@ -46,13 +46,13 @@ class GeekInfoMod(loader.Module):
         self.config = loader.ModuleConfig(
             "custom_message",
             False,
-            lambda: self.strings("_custom_msg_doc"),
+            lambda: self.tr("_custom_msg_doc"),
             "custom_buttons",
             {"text": "🤵‍♀️ Support chat", "url": "https://t.me/GeekTGChat"},
-            lambda: self.strings("_custom_button_doc"),
+            lambda: self.tr("_custom_button_doc"),
             "photo_url",
             "https://i.ibb.co/nMtdQXPn/maskot.jpg",
-            lambda: self.strings("_photo_url_doc"),
+            lambda: self.tr("_photo_url_doc"),
         )
 
     def _update_status(self) -> str:
@@ -87,13 +87,13 @@ class GeekInfoMod(loader.Module):
             "upd": self._update_status(),
             "platform": utils.get_platform_name(),
         }
-        fmt = self.config["custom_message"] or self.strings("default_message")
+        fmt = self.config["custom_message"] or self.tr("default_message")
         try:
             return fmt.format(**ctx)
         except (KeyError, IndexError):
             # User-provided template referenced an unknown placeholder — fall
             # back to the bundled default so the command keeps working.
-            return self.strings("default_message").format(**ctx)
+            return self.tr("default_message").format(**ctx)
 
     async def info_inline_handler(self, query: GeekInlineQuery) -> None:
         """
@@ -103,7 +103,7 @@ class GeekInfoMod(loader.Module):
 
         await query.answer(
             [
-                aiogram.types.inline_query_result.InlineQueryResultPhoto(
+                InlineQueryResultPhoto(
                     id=rand(20),
                     photo_url=self.config["photo_url"],
                     title="Send userbot info",

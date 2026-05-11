@@ -20,7 +20,7 @@ from aiogram.exceptions import (
     TelegramBadRequest,
     TelegramUnauthorizedError,
 )
-from telethon.tl.types import Message
+from telethon.tl.custom import Message
 
 from .. import loader, utils
 
@@ -69,12 +69,12 @@ class BotTokenMod(loader.Module):
         """Show the currently configured inline bot."""
         token = self.ctx.db.get(_DB_NS, _DB_KEY, None)
         if not token:
-            await utils.answer(message, self.strings("no_token", message))
+            await utils.answer(message, self.tr("no_token", message))
             return
         username = await self._username_for(token)
         await utils.answer(
             message,
-            self.strings("current", message).format(
+            self.tr("current", message).format(
                 username=username or "?", redacted=_redact(token)
             ),
         )
@@ -84,42 +84,38 @@ class BotTokenMod(loader.Module):
         """<token> — Replace the inline bot with your own (from @BotFather)."""
         args = utils.get_args_raw(message)
         if not args:
-            await utils.answer(message, self.strings("no_arg", message))
+            await utils.answer(message, self.tr("no_arg", message))
             return
         token = args.strip()
         if not _TOKEN_RE.match(token):
-            await utils.answer(message, self.strings("bad_format", message))
+            await utils.answer(message, self.tr("bad_format", message))
             return
 
         username = await self._username_for(token)
         if username is None:
             await utils.answer(
                 message,
-                self.strings("bad_token", message).format(err="Unauthorized"),
+                self.tr("bad_token", message).format(err="Unauthorized"),
             )
             return
 
         self.ctx.db.set(_DB_NS, _DB_KEY, token)
         await self._hotswap_inline(token)
-        await utils.answer(
-            message, self.strings("saved", message).format(username=username)
-        )
+        await utils.answer(message, self.tr("saved", message).format(username=username))
 
     @loader.owner
     async def resetbottokencmd(self, message: Message) -> None:
         """Forget the saved bot token (will create a new bot on next restart)."""
         self.ctx.db.set(_DB_NS, _DB_KEY, None)
         await self._hotswap_inline(False)
-        await utils.answer(message, self.strings("reset", message))
+        await utils.answer(message, self.tr("reset", message))
 
     async def _hotswap_inline(self, token) -> None:
         """Push *token* into a running InlineManager and stop it so the next
         reload picks it up. Reaches into a private attribute by design — the
         manager exposes no public setter today.
         """
-        inline = getattr(self, "inline", None)
-        if inline is None:
-            return
+        inline = self.ctx.inline
         inline._token = token  # noqa: SLF001 — see docstring
         try:
             await inline._stop()

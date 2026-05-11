@@ -42,3 +42,6 @@ geektg-logs*
 *.webp
 *.webm
 !friendly_telegram/web/static/**
+
+# MkDocs build output
+/site/

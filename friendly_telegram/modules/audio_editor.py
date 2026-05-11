@@ -4,6 +4,8 @@ Requires the ``media`` extra (pydub, numpy) plus aiohttp and audioop-lts.
 Install with: pip install pydub numpy aiohttp audioop-lts
 """
 
+# pyright: reportMissingImports=false
+
 import io
 import logging
 import math
@@ -13,8 +15,8 @@ from typing import Awaitable, Callable, Optional, Union
 
 import numpy as np
 from pydub import AudioSegment, effects
-from telethon import types
-from telethon.tl.types import Message
+from telethon import TelegramClient, types
+from telethon.tl.custom import Message
 
 from .. import loader, utils
 
@@ -26,11 +28,20 @@ _CUT_RE = re.compile(r"^(?P<start>\d+)?:(?P<end>\d+)?$")
 Transform = Callable[[AudioSegment], Union[AudioSegment, Awaitable[AudioSegment]]]
 
 
+def _unwrap(reply) -> Optional[Message]:
+    """``utils.answer`` returns list/tuple — unwrap to the first message."""
+    if reply is None:
+        return None
+    if isinstance(reply, (list, tuple)):
+        return reply[0] if reply else None
+    return reply
+
+
 @dataclass
 class _AudioCtx:
     audio: AudioSegment
-    message: object  # progress message we keep editing
-    reply: object  # original audio message
+    message: Message  # progress message we keep editing
+    reply: Message  # original audio message
     duration: int
     voice: bool
     pref: str
@@ -82,7 +93,9 @@ class AudioEditorMod(loader.Module):
         fs = round(ctx.duration * duration_factor) if duration_factor != 1.0 else None
         await self._send_audio(ctx, out, title or ctx.pref, fs=fs, fmt=fmt)
 
-    def _parse_level(self, args: str, default: float, label: str) -> Optional[float]:
+    def _parse_level(
+        self, args: Optional[str], default: float, label: str
+    ) -> Optional[float]:
         """Return parsed float level in (1, 100], or None on bad input."""
         if not args:
             return default
@@ -98,10 +111,11 @@ class AudioEditorMod(loader.Module):
         args = utils.get_args_raw(message)
         lvl = self._parse_level(args, 2.0, "BassBoost")
         if lvl is None:
-            return await utils.answer(
+            await utils.answer(
                 message,
-                self.strings("set_value", message).format("BassBoost", 2.0, 100.0),
+                self.tr("set_value", message).format("BassBoost", 2.0, 100.0),
             )
+            return
 
         def _bass(audio: AudioSegment) -> AudioSegment:
             samples = list(audio.get_array_of_samples())
@@ -118,10 +132,11 @@ class AudioEditorMod(loader.Module):
         args = utils.get_args_raw(message)
         lvl = self._parse_level(args, 25.0, "Distort")
         if lvl is None:
-            return await utils.answer(
+            await utils.answer(
                 message,
-                self.strings("set_value", message).format("Distort", 2.0, 100.0),
+                self.tr("set_value", message).format("Distort", 2.0, 100.0),
             )
+            return
         await self._apply(
             message, "Distort", lambda a: a + lvl, title=f"Distort {lvl}lvl"
         )
@@ -203,9 +218,8 @@ class AudioEditorMod(loader.Module):
         """.convs [format] — Convert to audio format (e.g. mp3, ogg, flac)"""
         args = utils.get_args(message)
         if not args:
-            return await utils.answer(
-                message, self.strings("set_fmt", message).format("Converter")
-            )
+            await utils.answer(message, self.tr("set_fmt", message).format("Converter"))
+            return
         fmt = args[0].lower()
         ctx = await self._get_audio(message, "Converter")
         if not ctx:
@@ -216,11 +230,10 @@ class AudioEditorMod(loader.Module):
     async def cutscmd(self, message: Message) -> None:
         """.cuts start(ms):end(ms) — Cut audio to a time range"""
         args = utils.get_args_raw(message)
-        match = _CUT_RE.match(args or "")
+        match = _CUT_RE.match(args)
         if not match:
-            return await utils.answer(
-                message, self.strings("set_time", message).format("Cut")
-            )
+            await utils.answer(message, self.tr("set_time", message).format("Cut"))
+            return
         start = int(match["start"]) if match["start"] else 0
         end = int(match["end"]) if match["end"] else 0
 
@@ -234,33 +247,33 @@ class AudioEditorMod(loader.Module):
     async def _get_audio(self, message: Message, pref: str) -> Optional[_AudioCtx]:
         reply = await message.get_reply_message()
         if not (reply and reply.file and reply.file.mime_type):
-            await utils.answer(message, self.strings("reply", message).format(pref))
+            await utils.answer(message, self.tr("reply", message).format(pref))
             return None
 
         kind = reply.file.mime_type.split("/", 1)[0]
         if kind not in ("audio", "video"):
-            await utils.answer(message, self.strings("reply", message).format(pref))
+            await utils.answer(message, self.tr("reply", message).format(pref))
             return None
 
+        document = reply.document
+        attrs = getattr(document, "attributes", []) or []
         attr = next(
-            (
-                a
-                for a in reply.document.attributes
-                if isinstance(a, types.DocumentAttributeAudio)
-            ),
+            (a for a in attrs if isinstance(a, types.DocumentAttributeAudio)),
             None,
         )
         voice = bool(attr and attr.voice) if kind == "audio" else False
         duration = attr.duration if attr else 0
 
-        progress = await utils.answer(
-            message, self.strings("downloading", message).format(pref)
+        progress = _unwrap(
+            await utils.answer(message, self.tr("downloading", message).format(pref))
         )
         raw = await reply.download_media(bytes)
         audio = AudioSegment.from_file(io.BytesIO(raw))
-        progress = await utils.answer(
-            progress, self.strings("working", message).format(pref)
+        progress = _unwrap(
+            await utils.answer(progress, self.tr("working", message).format(pref))
         )
+        if progress is None:
+            return None
 
         return _AudioCtx(
             audio=audio,
@@ -286,11 +299,13 @@ class AudioEditorMod(loader.Module):
         out_file = io.BytesIO()
         out_file.name = "audio.ogg" if ctx.voice else f"audio.{fmt}"
 
-        placeholder = await utils.answer(
-            ctx.message, self.strings("exporting", ctx.message).format(ctx.pref)
+        placeholder = _unwrap(
+            await utils.answer(
+                ctx.message, self.tr("exporting", ctx.message).format(ctx.pref)
+            )
         )
-        if isinstance(placeholder, (list, tuple)):
-            placeholder = placeholder[0]
+        if placeholder is None:
+            return
 
         out.export(
             out_file,
@@ -301,7 +316,7 @@ class AudioEditorMod(loader.Module):
         out_file.seek(0)
 
         attributes = (
-            None
+            []
             if ctx.voice
             else [
                 types.DocumentAttributeAudio(
@@ -312,8 +327,13 @@ class AudioEditorMod(loader.Module):
             ]
         )
 
+        client: TelegramClient = placeholder.client  # type: ignore[assignment]
+        if client is None:
+            logger.warning("AudioEditor: placeholder has no client; aborting send")
+            return
+
         try:
-            await placeholder.client.send_file(
+            await client.send_file(
                 utils.get_chat_id(placeholder),
                 out_file,
                 reply_to=ctx.reply.id,
