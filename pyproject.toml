@@ -66,6 +66,13 @@ dev = [
     "black>=25",
     "isort>=6",
 ]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
+    "mkdocs-static-i18n>=1.2",
+    "black>=25",
+]
 
 [tool.black]
 line-length = 88

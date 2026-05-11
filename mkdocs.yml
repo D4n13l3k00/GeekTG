@@ -1,0 +1,127 @@
+site_name: GeekTG
+site_description: GeekTG-flavoured Friendly Telegram userbot — developer reference
+site_url: https://d4n13l3k00.github.io/GeekTG/
+repo_url: https://github.com/D4n13l3k00/GeekTG
+repo_name: D4n13l3k00/GeekTG
+edit_uri: edit/dev/docs/
+
+docs_dir: docs
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: folder
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: ru
+          name: Русский
+          build: true
+          nav_translations:
+            Home: Главная
+            Modules: Модули
+            Inline: Inline-меню
+            Database: База данных
+            Utils: Утилиты
+            Security: Безопасность
+            API reference: API-справочник
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: true
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 80
+            members_order: source
+            merge_init_into_class: true
+            filters: ["!^_"]
+
+nav:
+  - Home: README.md
+  - Modules: modules.md
+  - Inline: inline.md
+  - Database: database.md
+  - Utils: utils.md
+  - Security: security.md
+  - API reference:
+      - api/loader.md
+      - api/utils.md
+      - api/inline.md
+      - api/database.md
+      - api/security.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/D4n13l3k00/GeekTG
+    - icon: fontawesome/brands/telegram
+      link: https://t.me/GeekTGChat
