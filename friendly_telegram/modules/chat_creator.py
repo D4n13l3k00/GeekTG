@@ -45,7 +45,10 @@ async def _create_channel(client, title: str) -> str:
 async def _create_group(client, title: str) -> str:
     """Create a basic group (legacy chat); return an invite link."""
     result = await client(CreateChatRequest(users=[], title=title))
-    return await _export_invite(client, result.chats[0])
+    # Telethon ≥1.36 wraps the response in InvitedUsers; the actual
+    # Updates payload (with .chats) hangs off .updates.
+    updates = getattr(result, "updates", result)
+    return await _export_invite(client, updates.chats[0])
 
 
 async def _create_supergroup(client, title: str) -> str:
