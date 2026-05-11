@@ -9,6 +9,11 @@ This doc covers the canonical module layout, the lifecycle, and the small
 foot-guns that aren't obvious from the code. Topics with their own pages
 (inline forms, security, database, utils) are linked inline.
 
+> Use `from telethon.tl.custom import Message` for handler signatures.
+> The `tl.types.Message` class lacks `.edit`, `.delete`, `.respond`,
+> `.get_reply_message`, `.is_reply`, `.raw_text` — the ones every
+> handler in the codebase relies on.
+
 ---
 
 ## Table of contents
@@ -16,17 +21,18 @@ foot-guns that aren't obvious from the code. Topics with their own pages
 1. [The five-minute module](#the-five-minute-module)
 2. [Anatomy of a module](#anatomy-of-a-module)
 3. [Lifecycle hooks](#lifecycle-hooks)
-4. [Commands](#commands)
-5. [Watchers (passive handlers)](#watchers-passive-handlers)
-6. [Inline manager](#inline-manager) — see also **[inline.md](inline.md)**
-7. [Strings and translations](#strings-and-translations)
-8. [Config (`ModuleConfig`)](#config-moduleconfig)
-9. [Database and assets](#database-and-assets) — see **[database.md](database.md)**
-10. [Utils cheatsheet](#utils-cheatsheet) — see **[utils.md](utils.md)**
-11. [Security](#security) — see **[security.md](security.md)**
-12. [Module headers and metadata directives](#module-headers-and-metadata-directives)
-13. [Distribution and loading](#distribution-and-loading)
-14. [Best practices and pitfalls](#best-practices-and-pitfalls)
+4. [`self.ctx` — unified DI bundle](#selfctx--unified-di-bundle)
+5. [Commands](#commands)
+6. [Watchers (passive handlers)](#watchers-passive-handlers)
+7. [Inline manager](#inline-manager) — see also **[inline.md](inline.md)**
+8. [Strings and translations](#strings-and-translations)
+9. [Config (`ModuleConfig`)](#config-moduleconfig)
+10. [Database and assets](#database-and-assets) — see **[database.md](database.md)**
+11. [Utils cheatsheet](#utils-cheatsheet) — see **[utils.md](utils.md)**
+12. [Security](#security) — see **[security.md](security.md)**
+13. [Module headers and metadata directives](#module-headers-and-metadata-directives)
+14. [Distribution and loading](#distribution-and-loading)
+15. [Best practices and pitfalls](#best-practices-and-pitfalls)
 
 ---
 
@@ -39,7 +45,7 @@ load it from a URL via `.loadmod`):
 # meta developer: @your_handle
 # requires: pillow
 
-from telethon.tl.types import Message
+from telethon.tl.custom import Message
 from friendly_telegram import loader, utils
 
 
@@ -58,7 +64,7 @@ class HelloMod(loader.Module):
         sender = await message.get_sender()
         await utils.answer(
             message,
-            self.strings("hi", message).format(name=sender.first_name),
+            self.tr("hi", message).format(name=sender.first_name),
         )
 ```
 
@@ -112,7 +118,7 @@ non-trivial modules implement at least `client_ready`.
 | ---- | --------- | ---- |
 | `__init__` | `(self) -> None` | When the file is imported. **Sync** — don't do I/O here. The only normal use is `self.config = loader.ModuleConfig(...)`. |
 | `config_complete` | `(self) -> None` | After `self.config` has been merged with persisted DB values. Sync. Use to validate config invariants. |
-| `client_ready` | `async (self, client, db)` | After every client is connected and the inline manager is initialized. Save references, start background tasks here. |
+| `client_ready` | `async (self, client, db)` | After every client is connected and the inline manager is initialized. Optional — modern code reads `self.ctx` directly. Override only when you need to start background tasks or do async one-time setup. |
 | `on_unload` | `async (self) -> None` | On `.unloadmod`, reload, or shutdown. Hard 5-second timeout — cancel your tasks here, do not call `await client.send_message(...)` for cleanup. |
 
 Background tasks: hold a strong reference. The framework's GC may otherwise
@@ -120,12 +126,68 @@ collect a fire-and-forget `asyncio.ensure_future(...)`.
 
 ```python
 async def client_ready(self, client, db):
-    self._db = db
     self._task = asyncio.create_task(self._loop())  # keep the ref!
 
 async def on_unload(self):
     self._task.cancel()
 ```
+
+---
+
+## `self.ctx` — unified DI bundle
+
+The framework populates `self.ctx` (a frozen `ModuleContext` dataclass)
+**before `client_ready` runs**, so it's available everywhere a module's
+methods can possibly execute: commands, watchers, inline handlers,
+callback handlers, form callbacks, background tasks.
+
+```python
+@dataclass(frozen=True)
+class ModuleContext:
+    client:     TelegramClient        # the userbot's main client
+    db:         Database              # KV store + asset blobs
+    inline:     InlineManager         # same object as self.inline
+    modules:    Modules               # loader (other modules, watchers, …)
+    allclients: Sequence[TelegramClient]
+    log:        Callable[..., Any]    # framework log helper
+    origin:     str                   # "<file>" or load source
+```
+
+Prefer reading `self.ctx.X` over copying things into `self._client = client`
+inside `client_ready` — that boilerplate is legacy. The frozen dataclass
+also means a misbehaving module can't swap the loader's view of the world
+out from under itself.
+
+```python
+@loader.tds
+class FooMod(loader.Module):
+    """Demo of self.ctx usage."""
+
+    @loader.owner
+    async def hellocmd(self, message: Message):
+        # In commands you can use either message.client or self.ctx.client —
+        # they're the same object. Use self.ctx when there's no message.
+        me = await self.ctx.client.get_me()
+        self.ctx.db.set(__name__, "last_run_by", me.id)
+        await utils.answer(message, f"Hi, {me.first_name}!")
+
+    async def on_btn(self, call):
+        # Inline-form callbacks don't have a Telethon Message — self.ctx
+        # is how you reach the client and DB from here.
+        await self.ctx.client.send_message("me", "Button pressed!")
+```
+
+### When to still override `client_ready`
+
+- Starting background tasks (`asyncio.create_task(...)`) — you need
+  somewhere to put the spawn call, and `client_ready` is the canonical
+  place. Hold the task on `self`.
+- Async one-time setup that depends on the client being connected
+  (e.g. `self._me = await client.get_me()` if you need it eagerly).
+- Legacy modules that still do `self._db = db; self._client = client` —
+  these keep working but should migrate to `self.ctx` over time.
+
+You do **not** need to override it just to "save references" any more.
 
 ---
 
@@ -182,6 +244,29 @@ async def watcher(self, message: Message):
 
 Throw exceptions liberally — they are logged and don't crash the dispatcher.
 
+### `aiogram_watcher` (private DMs to the inline bot)
+
+A separate hook fires for **messages sent privately to the inline bot**
+(not the userbot). Use it for state machines, FSM-like flows, or
+"send the next photo" prompts after an inline form.
+
+```python
+async def aiogram_watcher(self, message):
+    # message is a native aiogram.types.Message
+    if message.text == "ping":
+        await message.answer("pong")
+```
+
+The bot's `parse_mode` defaults to `HTML` (set globally via
+`DefaultBotProperties`), so `message.answer("<b>hi</b>")` works without
+extra arguments.
+
+### Disabling watchers per-instance
+
+The user can disable any watcher with `.watcherbl <ModuleName>`; the list
+lives at `db["friendly_telegram.main"]["disabled_watchers"]`. The
+dispatcher consults it on every dispatch, so toggling is instant.
+
 ---
 
 ## Inline manager
@@ -228,14 +313,19 @@ The full reference — button types, gallery / `_inline_handler` /
 
 ## Strings and translations
 
-`strings` is *not* a plain dict at runtime — `@loader.tds` rewrites it into a
-`Strings` object that:
+Class-level `strings` is a `dict` literal at definition time. After
+`@loader.tds` runs (during `send_config_one`) the framework swaps it
+for a `Strings` object that:
 
 - exposes attribute lookup (`self.strings["hi"]`) **and** call lookup
   (`self.strings("hi", message)`),
 - merges in translations from any langpack registered with `.langpack`,
 - fills `_cmd_doc_<name>` and `_cls_doc` with command/class docstrings
   automatically so they are translatable too.
+
+Because the type changes underfoot, type checkers can't follow
+`self.strings(...)`. Use **`self.tr(key, message=None)`** in module
+code — it's a real method that wraps `self.strings(key, message)`:
 
 ```python
 strings = {
@@ -244,10 +334,10 @@ strings = {
     "fail": "🚫 <b>Couldn't: {}</b>",
 }
 
-await utils.answer(message, self.strings("ok", message))
+await utils.answer(message, self.tr("ok", message))
 await utils.answer(
     message,
-    self.strings("fail", message).format(reason),
+    self.tr("fail", message).format(reason),
 )
 ```
 
@@ -292,7 +382,7 @@ For runtime-tunable settings (URLs, thresholds, feature flags) use
 ```python
 def __init__(self):
     self.config = loader.ModuleConfig(
-        "GREETING", "Hello",       lambda m: self.strings("greeting_doc", m),
+        "GREETING", "Hello",       lambda m: self.tr("greeting_doc", m),
         "MAX_TRIES", 3,            "How many times to retry on failure",
     )
 
@@ -301,6 +391,10 @@ async def client_ready(self, client, db):
     default = self.config.getdef("GREETING") # original default
     doc = self.config.getdoc("GREETING")     # description for .config
 ```
+
+Entries are passed in `(KEY, default, doc)` triples (positionally; the
+`ModuleConfig.__init__` chunks them by `i % 3`). `doc` may be a string
+or a `callable(message)` returning a string for translatable docs.
 
 The user adjusts these via `.config <ModuleName> <KEY> <value>`. Values are
 persisted in the database under the module's `__module__` namespace.
@@ -314,9 +408,10 @@ JSON KV store + binary blob storage. Use `db.get(__name__, key, default)` /
 `db.fetch_asset()` for media.
 
 ```python
-async def client_ready(self, client, db):
-    self._db = db
-    self._db.set(__name__, "counter", self._db.get(__name__, "counter", 0) + 1)
+@loader.owner
+async def bumpcmd(self, message: Message):
+    db = self.ctx.db
+    db.set(__name__, "counter", db.get(__name__, "counter", 0) + 1)
 ```
 
 Full reference: **[database.md](database.md)**.
@@ -397,6 +492,33 @@ A user installs your module in one of three ways:
 Modules persist across restarts because the `.py` source itself is stored
 on disk. To uninstall: `.unloadmod <ClassName>` (removes the file too).
 
+### Internal registration flow
+
+When the loader picks up a module file (boot or `.loadmod`):
+
+1. **Import.** The `.py` is imported via `importlib`, registered in
+   `sys.modules` under a synthetic name (`friendly_telegram.modules.<name>`
+   for bundled modules, `loaded_modules.<ClassName>` for user files).
+2. **Class discovery.** The loader scans for a class ending in `Mod` that
+   subclasses `loader.Module`. There must be exactly one — extras are
+   ignored.
+3. **Replace existing.** If a module with the same class name is already
+   loaded, `on_unload()` runs on the old instance (5 s timeout) and its
+   commands/watchers are removed from the global dispatcher.
+4. **`config_complete`.** `mod.config` is hydrated from DB / env / defaults
+   and `config_complete()` is invoked. `@loader.tds` injects translated
+   docstrings here.
+5. **`ctx` set.** `mod.ctx = ModuleContext(...)` — the unified DI bundle.
+6. **`client_ready`.** All modules' `client_ready` run in parallel
+   (`asyncio.gather`). After they all finish, `_client_ready2` runs (also
+   in parallel) — internal hook for core modules only.
+7. **Handler discovery.** `*cmd`, `*_inline_handler`, `*_callback_handler`,
+   `watcher`, `aiogram_watcher` are introspected and registered with the
+   dispatcher / inline manager.
+
+`.unloadmod` reverses steps 7 → 3 in order: deregister handlers, run
+`on_unload`, drop from `sys.modules`, delete the source file.
+
 ---
 
 ## Best practices and pitfalls
@@ -427,16 +549,16 @@ on disk. To uninstall: `.unloadmod <ClassName>` (removes the file too).
 
 ## Where to look in the codebase
 
-- [`friendly_telegram/loader.py`](../friendly_telegram/loader.py) — the
+- [`friendly_telegram/loader.py`](https://github.com/D4n13l3k00/GeekTG/blob/dev/friendly_telegram/loader.py) — the
   `Module` base class, `tds` decorator, registration logic.
-- [`friendly_telegram/dispatcher.py`](../friendly_telegram/dispatcher.py) —
+- [`friendly_telegram/dispatcher.py`](https://github.com/D4n13l3k00/GeekTG/blob/dev/friendly_telegram/dispatcher.py) —
   command parsing, security checks.
-- [`friendly_telegram/security.py`](../friendly_telegram/security.py) —
+- [`friendly_telegram/security.py`](https://github.com/D4n13l3k00/GeekTG/blob/dev/friendly_telegram/security.py) —
   permission predicates behind `@loader.owner` & friends.
-- [`friendly_telegram/inline/`](../friendly_telegram/inline/) — inline
+- [`friendly_telegram/inline/`](https://github.com/D4n13l3k00/GeekTG/blob/dev/friendly_telegram/inline/) — inline
   manager package: `manager.py` (lifecycle/dispatch), `types.py` (the
   `InlineCall` wrapper, helpers).
-- [`friendly_telegram/modules/`](../friendly_telegram/modules/) — bundled
+- [`friendly_telegram/modules/`](https://github.com/D4n13l3k00/GeekTG/blob/dev/friendly_telegram/modules/) — bundled
   core modules. Best living examples.
 
 When in doubt, copy a small core module (`bot_token.py`, `nocollisions.py`)
