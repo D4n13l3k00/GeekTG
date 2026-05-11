@@ -17,7 +17,7 @@ import logging
 
 from telethon.tl.custom import Message
 from telethon.tl.functions.channels import CreateChannelRequest
-from telethon.tl.functions.messages import CreateChatRequest
+from telethon.tl.functions.messages import CreateChatRequest, ExportChatInviteRequest
 
 from .. import loader, utils
 
@@ -30,25 +30,28 @@ _DEFAULT_TITLES = {
 }
 
 
+async def _export_invite(client, peer) -> str:
+    """Export a primary invite link for the freshly-created chat."""
+    invite = await client(ExportChatInviteRequest(peer=peer))
+    return invite.link
+
+
 async def _create_channel(client, title: str) -> str:
-    """Create a private broadcast channel; return its t.me link."""
+    """Create a private broadcast channel; return an invite link."""
     result = await client(CreateChannelRequest(title=title, about="", megagroup=False))
-    ch = result.chats[0]
-    return f"https://t.me/c/{ch.id}/1"
+    return await _export_invite(client, result.chats[0])
 
 
 async def _create_group(client, title: str) -> str:
-    """Create a basic group (legacy chat); return placeholder link."""
+    """Create a basic group (legacy chat); return an invite link."""
     result = await client(CreateChatRequest(users=[], title=title))
-    chat = result.chats[0]
-    return f"https://t.me/c/{chat.id}/1"
+    return await _export_invite(client, result.chats[0])
 
 
 async def _create_supergroup(client, title: str) -> str:
-    """Create a supergroup (megagroup channel); return its t.me link."""
+    """Create a supergroup (megagroup channel); return an invite link."""
     result = await client(CreateChannelRequest(title=title, about="", megagroup=True))
-    ch = result.chats[0]
-    return f"https://t.me/c/{ch.id}/1"
+    return await _export_invite(client, result.chats[0])
 
 
 @loader.tds
@@ -61,17 +64,17 @@ class ChatCreatorMod(loader.Module):
         "done_channel": (
             "📢 <b>Channel created!</b>\n\n"
             "📌 <b>Title:</b> <code>{title}</code>\n"
-            "🔗 <b>Link:</b> {link}"
+            "🔗 <b>Invite:</b> {link}"
         ),
         "done_group": (
             "👥 <b>Group created!</b>\n\n"
             "📌 <b>Title:</b> <code>{title}</code>\n"
-            "🔗 <b>Link:</b> {link}"
+            "🔗 <b>Invite:</b> {link}"
         ),
         "done_supergroup": (
             "🌐 <b>Supergroup created!</b>\n\n"
             "📌 <b>Title:</b> <code>{title}</code>\n"
-            "🔗 <b>Link:</b> {link}"
+            "🔗 <b>Invite:</b> {link}"
         ),
         "error": "🚫 <b>Failed to create:</b> <code>{err}</code>",
         "no_title": "❓ <b>Specify a title:</b> <code>{usage}</code>",
