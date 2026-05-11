@@ -17,7 +17,7 @@ import importlib as _importlib
 import importlib.util as _importlib_util
 import sys as _sys
 
-__version__ = (4, 2, 1)
+__version__ = (4, 2, 2)
 
 _LEGACY = "friendly-telegram"
 _REAL = __name__

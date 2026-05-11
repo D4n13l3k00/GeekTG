@@ -84,6 +84,8 @@ class ChatCreatorMod(loader.Module):
             "✏️ <b>Send a title for the new {type}</b>\n\n"
             "📌 <b>Current title:</b> <code>{title}</code>"
         ),
+        # Shown in the inline-switch placeholder (no HTML rendering there).
+        "inline_title_placeholder": "Send a title for the new {type}",
         "btn_channel": "📢 Channel",
         "btn_group": "👥 Group",
         "btn_super": "🌐 Supergroup",
@@ -168,8 +170,8 @@ class ChatCreatorMod(loader.Module):
                 [
                     {
                         "text": self.tr("btn_custom"),
-                        "input": self.tr("inline_title_prompt").format(
-                            type=type_label, title=utils.escape_html(default_title)
+                        "input": self.tr("inline_title_placeholder").format(
+                            type=type_label
                         ),
                         "handler": self._title_input,
                         # ``inline_message_id`` is required so call.edit() can
