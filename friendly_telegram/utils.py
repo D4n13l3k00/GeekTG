@@ -650,6 +650,17 @@ async def answer(message, response, **kwargs) -> List[Message]:
                 getattr(message, "reply_to_msg_id", None),
             )
             ret = (await message.client.send_file(message.chat_id, response, **kwargs),)
+            # send_file can't replace the original message — if we're
+            # answering our own command, the command would otherwise linger
+            # in the chat. Mirror the long-text branch above and delete it.
+            if edit:
+                try:
+                    await message.delete()
+                except Exception:
+                    logging.debug(
+                        "answer(): couldn't delete source command",
+                        exc_info=True,
+                    )
 
     if delete_job:
         await delete_job

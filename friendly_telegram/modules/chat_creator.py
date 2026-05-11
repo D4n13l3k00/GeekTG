@@ -95,7 +95,9 @@ class ChatCreatorMod(loader.Module):
         "btn_default": "✅ Use default title",
         "btn_custom": "✏️ Enter title",
         "btn_back": "⬅️ Back",
+        "btn_close": "🚫 Close",
         "cancelled": "✖️ <b>Cancelled.</b>",
+        "closed": "🚫 <b>Closed.</b>",
     }
 
     # ------------------------------------------------------------------ commands
@@ -127,6 +129,18 @@ class ChatCreatorMod(loader.Module):
 
     # ------------------------------------------------------------------ form callbacks
 
+    @staticmethod
+    async def _close(call) -> None:
+        """Tear the form down — used by the Close button on every stage."""
+        await call.delete()
+
+    def _close_button(self) -> dict:
+        return {
+            "text": self.tr("btn_close"),
+            "callback": self._close,
+            "style": "danger",
+        }
+
     def _pick_markup(self) -> list:
         return [
             [
@@ -148,6 +162,7 @@ class ChatCreatorMod(loader.Module):
                     "args": ("supergroup",),
                 },
             ],
+            [self._close_button()],
         ]
 
     async def _stage_two(self, call, chat_type: str) -> None:
@@ -189,8 +204,8 @@ class ChatCreatorMod(loader.Module):
                     {
                         "text": self.tr("btn_back"),
                         "callback": self._stage_one,
-                        "style": "danger",
                     },
+                    self._close_button(),
                 ],
             ],
         )
