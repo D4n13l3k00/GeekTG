@@ -55,6 +55,7 @@ _QUIET_OPTS = {
     "no_warnings": True,
     "logtostderr": False,
     "noprogress": True,
+    "color": "never",
 }
 
 
