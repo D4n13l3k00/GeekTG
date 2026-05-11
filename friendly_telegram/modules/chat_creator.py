@@ -77,7 +77,10 @@ class ChatCreatorMod(loader.Module):
         "no_title": "❓ <b>Specify a title:</b> <code>{usage}</code>",
         # inline
         "inline_pick": "🗂 <b>What do you want to create?</b>",
-        "inline_title_prompt": "✏️ <b>Send a title for the new {type}</b>",
+        "inline_title_prompt": (
+            "✏️ <b>Send a title for the new {type}</b>\n\n"
+            "📌 <b>Current title:</b> <code>{title}</code>"
+        ),
         "btn_channel": "📢 Channel",
         "btn_group": "👥 Group",
         "btn_super": "🌐 Supergroup",
@@ -114,20 +117,6 @@ class ChatCreatorMod(loader.Module):
             ttl=300,
         )
 
-    # ------------------------------------------------------------------ inline
-
-    async def newchat_inline_handler(self, query) -> None:
-        """
-        Open the chat-creation form
-        @allow: owner
-        """
-        await self.inline.form(
-            text=self.tr("inline_pick"),
-            message=query,
-            reply_markup=self._pick_markup(),
-            ttl=300,
-        )
-
     # ------------------------------------------------------------------ form callbacks
 
     def _pick_markup(self) -> list:
@@ -160,22 +149,30 @@ class ChatCreatorMod(loader.Module):
             "group": self.tr("btn_group"),
             "supergroup": self.tr("btn_super"),
         }[chat_type]
+        default_title = _DEFAULT_TITLES[chat_type]
         await call.edit(
-            text=self.tr("inline_title_prompt").format(type=type_label),
+            text=self.tr("inline_title_prompt").format(
+                type=type_label, title=utils.escape_html(default_title)
+            ),
             reply_markup=[
                 [
                     {
                         "text": self.tr("btn_default"),
                         "callback": self._do_create_cb,
-                        "args": (chat_type, _DEFAULT_TITLES[chat_type]),
+                        "args": (chat_type, default_title),
                     },
                 ],
                 [
                     {
                         "text": self.tr("btn_custom"),
-                        "input": self.tr("inline_title_prompt").format(type=type_label),
+                        "input": self.tr("inline_title_prompt").format(
+                            type=type_label, title=utils.escape_html(default_title)
+                        ),
                         "handler": self._title_input,
-                        "args": (chat_type,),
+                        # ``inline_message_id`` is required so call.edit() can
+                        # locate the form after the user types — without it
+                        # aiogram raises "message identifier is not specified".
+                        "args": (chat_type, call.inline_message_id),
                     },
                 ],
                 [
@@ -190,17 +187,29 @@ class ChatCreatorMod(loader.Module):
             reply_markup=self._pick_markup(),
         )
 
-    async def _title_input(self, call, query, chat_type: str) -> None:
+    async def _title_input(
+        self, call, query, chat_type: str, inline_message_id: str
+    ) -> None:
         """User typed a title in response to the inline 'input' button."""
         title = (query or "").strip() or _DEFAULT_TITLES[chat_type]
-        await self._do_create_cb(call, chat_type, title)
+        await self._do_create_cb(call, chat_type, title, inline_message_id)
 
-    async def _do_create_cb(self, call, chat_type: str, title: str) -> None:
+    async def _do_create_cb(
+        self,
+        call,
+        chat_type: str,
+        title: str,
+        inline_message_id: str = None,
+    ) -> None:
         """Run creation from inline; edit the form with the result."""
+        edit_kwargs = (
+            {"inline_message_id": inline_message_id} if inline_message_id else {}
+        )
         await call.edit(
             text=self.tr("creating").format(
                 type=chat_type.capitalize(), title=utils.escape_html(title)
             ),
+            **edit_kwargs,
         )
         try:
             link = await self._do_create(chat_type, title)
@@ -208,12 +217,14 @@ class ChatCreatorMod(loader.Module):
             logger.exception("ChatCreator inline: failed to create %s", chat_type)
             await call.edit(
                 text=self.tr("error").format(err=utils.escape_html(str(e))),
+                **edit_kwargs,
             )
             return
         await call.edit(
             text=self.tr(f"done_{chat_type}").format(
                 title=utils.escape_html(title), link=link
             ),
+            **edit_kwargs,
         )
 
     # ------------------------------------------------------------------ helpers
