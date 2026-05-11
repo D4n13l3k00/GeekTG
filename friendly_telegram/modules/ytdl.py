@@ -428,7 +428,9 @@ class YtDlMod(loader.Module):
                 }
             ]
         )
-        rows.append([{"text": "✖ Cancel", "callback": self._inline_cancel}])
+        rows.append(
+            [{"text": "✖ Cancel", "callback": self._inline_cancel, "style": "danger"}]
+        )
         return rows
 
     def _video_markup(

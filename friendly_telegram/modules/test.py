@@ -122,7 +122,7 @@ class TestMod(loader.Module):
                     },
                 ]
             )
-        rows.append([{"text": "🚫 Cancel", "callback": self.cancel}])
+        rows.append([{"text": "🚫 Cancel", "callback": self.cancel, "style": "danger"}])
         return rows
 
     async def _resolve_lvl(self, message, lvl: Optional[int]) -> Optional[int]:
@@ -185,8 +185,9 @@ class TestMod(loader.Module):
                         "text": "📤 Send anyway",
                         "callback": self.logscmd,
                         "args": [True, lvl],
+                        "style": "primary",
                     },
-                    {"text": "🚫 Cancel", "callback": self.cancel},
+                    {"text": "🚫 Cancel", "callback": self.cancel, "style": "danger"},
                 ]
             ],
         }

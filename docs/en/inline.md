@@ -141,6 +141,23 @@ inline-bot input field):
 }
 ```
 
+### Bot API 9.4 styling
+
+Any button dict above can carry two extra optional keys:
+
+- `style` — one of `"primary"` (blue), `"success"` (green), `"danger"`
+  (red). Anything else is logged and ignored.
+- `icon_custom_emoji_id` — Telegram custom-emoji document id, rendered
+  to the left of the label.
+
+```python
+{"text": "Delete", "callback": self.do_delete, "style": "danger"}
+{"text": "Confirm", "callback": self.confirm,
+ "style": "success", "icon_custom_emoji_id": "5444323130003012112"}
+```
+
+Both are forwarded as-is to aiogram and validated server-side.
+
 ## Gallery
 
 A swipeable photo strip with a single "Next ➡️" button:

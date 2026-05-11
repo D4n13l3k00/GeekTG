@@ -80,8 +80,16 @@ class PythonMod(loader.Module):
                 message=message,
                 reply_markup=[
                     [
-                        {"text": "✅ Allow", "callback": self.inline__allow},
-                        {"text": "🚫 Cancel", "callback": self.inline__close},
+                        {
+                            "text": "✅ Allow",
+                            "callback": self.inline__allow,
+                            "style": "success",
+                        },
+                        {
+                            "text": "🚫 Cancel",
+                            "callback": self.inline__close,
+                            "style": "danger",
+                        },
                     ]
                 ],
             )

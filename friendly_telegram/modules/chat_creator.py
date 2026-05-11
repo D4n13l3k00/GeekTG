@@ -168,6 +168,7 @@ class ChatCreatorMod(loader.Module):
                         "text": self.tr("btn_default"),
                         "callback": self._do_create_cb,
                         "args": (chat_type, default_title),
+                        "style": "success",
                     },
                 ],
                 [
@@ -181,10 +182,15 @@ class ChatCreatorMod(loader.Module):
                         # locate the form after the user types — without it
                         # aiogram raises "message identifier is not specified".
                         "args": (chat_type, call.inline_message_id),
+                        "style": "primary",
                     },
                 ],
                 [
-                    {"text": self.tr("btn_back"), "callback": self._stage_one},
+                    {
+                        "text": self.tr("btn_back"),
+                        "callback": self._stage_one,
+                        "style": "danger",
+                    },
                 ],
             ],
         )

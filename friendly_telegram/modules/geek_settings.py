@@ -254,8 +254,16 @@ class GeekSettingsMod(loader.Module):
                 self.tr(confirm_text_key),
                 reply_markup=[
                     [
-                        {"text": accept_label, "callback": accept_callback},
-                        {"text": "🚫 Cancel", "callback": self.inline__close},
+                        {
+                            "text": accept_label,
+                            "callback": accept_callback,
+                            "style": "success",
+                        },
+                        {
+                            "text": "🚫 Cancel",
+                            "callback": self.inline__close,
+                            "style": "danger",
+                        },
                     ]
                 ],
             )
@@ -313,14 +321,22 @@ class GeekSettingsMod(loader.Module):
                     "text": "🔄 Restart",
                     "callback": self.inline__restart,
                     "args": (True,),
+                    "style": "primary",
                 },
                 {
                     "text": "🪂 Update",
                     "callback": self.inline__update,
                     "args": (True,),
+                    "style": "primary",
                 },
             ],
-            [{"text": "😌 Close menu", "callback": self.inline__close}],
+            [
+                {
+                    "text": "😌 Close menu",
+                    "callback": self.inline__close,
+                    "style": "danger",
+                }
+            ],
         ]
 
     @loader.owner

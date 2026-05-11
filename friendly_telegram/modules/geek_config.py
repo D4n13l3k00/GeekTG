@@ -112,7 +112,11 @@ class GeekConfigMod(loader.Module):
                         "callback": self.inline__configure,
                         "args": (mod,),
                     },
-                    {"text": "🚫 Close", "callback": self.inline__close},
+                    {
+                        "text": "🚫 Close",
+                        "callback": self.inline__close,
+                        "style": "danger",
+                    },
                 ]
             ],
             inline_message_id=inline_message_id,
@@ -139,6 +143,7 @@ class GeekConfigMod(loader.Module):
                         "input": "✍️ Enter new configuration value for this option",  # noqa: E501
                         "handler": self.inline__set_config,
                         "args": (mod, config_opt, call.inline_message_id),
+                        "style": "primary",
                     }
                 ],
                 [
@@ -147,7 +152,11 @@ class GeekConfigMod(loader.Module):
                         "callback": self.inline__configure,
                         "args": (mod,),
                     },
-                    {"text": "🚫 Close", "callback": self.inline__close},
+                    {
+                        "text": "🚫 Close",
+                        "callback": self.inline__close,
+                        "style": "danger",
+                    },
                 ],
             ],
         )
@@ -173,7 +182,11 @@ class GeekConfigMod(loader.Module):
             + [
                 [
                     {"text": "👈 Back", "callback": self.inline__global_config},
-                    {"text": "🚫 Close", "callback": self.inline__close},
+                    {
+                        "text": "🚫 Close",
+                        "callback": self.inline__close,
+                        "style": "danger",
+                    },
                 ]
             ],
         )

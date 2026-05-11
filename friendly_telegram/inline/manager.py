@@ -577,15 +577,40 @@ class InlineManager:
         )
 
         rows: List[List[InlineKeyboardButton]] = []
+        # Bot API 9.4 styling — accepted as extra kwargs on every button.
+        # ``style`` ∈ {"primary","success","danger"}; ``icon_custom_emoji_id``
+        # is a custom-emoji document id. Both are forwarded as-is to aiogram
+        # which validates them server-side.
+        _STYLE_VALUES = {"primary", "success", "danger"}
+
+        def _extras(btn: dict) -> dict:
+            out = {}
+            style = btn.get("style")
+            if style is not None:
+                if style not in _STYLE_VALUES:
+                    logger.warning(
+                        "Ignoring unknown button style %r (expected %s)",
+                        style,
+                        sorted(_STYLE_VALUES),
+                    )
+                else:
+                    out["style"] = style
+            icon = btn.get("icon_custom_emoji_id")
+            if icon is not None:
+                out["icon_custom_emoji_id"] = str(icon)
+            return out
+
         for row in buttons:
             line = []
             for button in row:
                 try:
+                    extras = _extras(button)
                     if "url" in button:
                         line.append(
                             InlineKeyboardButton(
                                 text=button["text"],
                                 url=button.get("url", None),
+                                **extras,
                             )
                         )
                     elif "callback" in button:
@@ -593,6 +618,7 @@ class InlineManager:
                             InlineKeyboardButton(
                                 text=button["text"],
                                 callback_data=button["_callback_data"],
+                                **extras,
                             )
                         )
                     elif "input" in button:
@@ -601,6 +627,7 @@ class InlineManager:
                                 text=button["text"],
                                 switch_inline_query_current_chat=button["_switch_query"]
                                 + " ",
+                                **extras,
                             )
                         )
                     elif "data" in button:
@@ -608,6 +635,7 @@ class InlineManager:
                             InlineKeyboardButton(
                                 text=button["text"],
                                 callback_data=button["data"],
+                                **extras,
                             )
                         )
                     else:

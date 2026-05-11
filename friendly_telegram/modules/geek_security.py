@@ -123,7 +123,13 @@ class GeekSecurityMod(loader.Module):
             for group, level in perms.items()
         ]
         return chunks(buttons, 2) + [
-            [{"text": self.tr("close_menu"), "callback": self.inline_close}]
+            [
+                {
+                    "text": self.tr("close_menu"),
+                    "callback": self.inline_close,
+                    "style": "danger",
+                }
+            ]
         ]
 
     def _build_markup(self, command: FunctionType) -> List[List[dict]]:
@@ -278,11 +284,13 @@ class GeekSecurityMod(loader.Module):
                         {
                             "text": self.tr("cancel"),
                             "callback": self.inline_close,
+                            "style": "danger",
                         },
                         {
                             "text": self.tr("confirm"),
                             "callback": self._add_to_group,
                             "args": (group, True, entity.id),
+                            "style": "success",
                         },
                     ]
                 ],
