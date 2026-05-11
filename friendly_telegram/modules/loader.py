@@ -23,14 +23,15 @@ import logging
 import os
 import re
 import sys
-import urllib
+import urllib.parse
 import uuid
 from importlib.abc import SourceLoader
 from importlib.machinery import ModuleSpec
+from typing import Any
 
 import httpx
 import telethon
-from telethon.tl.types import Message
+from telethon.tl.custom import Message
 
 from .. import loader, main, utils
 
@@ -173,7 +174,7 @@ class LoaderMod(loader.Module):
         self.config = loader.ModuleConfig(
             "MODULES_REPO",
             "https://raw.githubusercontent.com/GeekTG/FTG-Modules/main/",
-            lambda m: self.strings("repo_config_doc", m),
+            lambda m: self.tr("repo_config_doc", m),
         )
 
     @loader.owner
@@ -198,7 +199,7 @@ class LoaderMod(loader.Module):
                 message,
                 (
                     "<b>"
-                    + self.strings("avail_header", message)
+                    + self.tr("avail_header", message)
                     + "</b>\n"
                     + "\n".join(f"<code>{i}</code>" for i in sorted(text.split("\n")))
                 ),
@@ -210,14 +211,14 @@ class LoaderMod(loader.Module):
         args = utils.get_args(message)
 
         if not args:
-            await utils.answer(message, self.strings("select_preset", message))
+            await utils.answer(message, self.tr("select_preset", message))
             return
 
         try:
             await self.get_repo_list(args[0])
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                await utils.answer(message, self.strings("no_preset", message))
+                await utils.answer(message, self.tr("no_preset", message))
                 return
 
             raise
@@ -226,7 +227,7 @@ class LoaderMod(loader.Module):
         self.ctx.db.set(__name__, "loaded_modules", [])
         self.ctx.db.set(__name__, "unloaded_modules", [])
 
-        await utils.answer(message, self.strings("preset_loaded", message))
+        await utils.answer(message, self.tr("preset_loaded", message))
         await self.allmodules.commands["restart"](await message.reply("_"))
 
     async def _get_modules_to_load(self):
@@ -261,7 +262,7 @@ class LoaderMod(loader.Module):
 
             if r.status_code == 404:
                 if message is not None:
-                    await utils.answer(message, self.strings("no_module", message))
+                    await utils.answer(message, self.tr("no_module", message))
 
                 return False
 
@@ -272,7 +273,7 @@ class LoaderMod(loader.Module):
         except Exception:
             logger.exception("Failed to load %s", module_name)
             if message is not None:
-                await utils.answer(message, self.strings("load_failed", message))
+                await utils.answer(message, self.tr("load_failed", message))
             return False
 
     @loader.owner
@@ -287,10 +288,10 @@ class LoaderMod(loader.Module):
                     with open(path_, "rb") as f:
                         doc = f.read()
                 except FileNotFoundError:
-                    await utils.answer(message, self.strings("no_file", message))
+                    await utils.answer(message, self.tr("no_file", message))
                     return
             else:
-                await utils.answer(message, self.strings("provide_module", message))
+                await utils.answer(message, self.tr("provide_module", message))
                 return
         else:
             path_ = None
@@ -298,10 +299,14 @@ class LoaderMod(loader.Module):
 
         logger.debug("Loading external module...")
 
+        if not isinstance(doc, (bytes, bytearray)):
+            await utils.answer(message, self.tr("no_file", message))
+            return
+
         try:
             doc = doc.decode("utf-8")
         except UnicodeDecodeError:
-            await utils.answer(message, self.strings("bad_unicode", message))
+            await utils.answer(message, self.tr("bad_unicode", message))
             return
 
         if path_ is not None:
@@ -316,28 +321,29 @@ class LoaderMod(loader.Module):
             "ffmpeg -version"
         ):  # skipcq: BAN-B605, BAN-B607
             if isinstance(message, Message):
-                await utils.answer(message, self.strings("ffmpeg_required"))
+                await utils.answer(message, self.tr("ffmpeg_required"))
             return
 
         if re.search(r"# ?scope: ?inline", doc) and not self.inline.init_complete:
             if isinstance(message, Message):
-                await utils.answer(message, self.strings("inline_init_failed"))
+                await utils.answer(message, self.tr("inline_init_failed"))
             return
 
         if re.search(r"# ?scope: ?geektg_min", doc):
-            ver = re.search(
+            ver_match = re.search(
                 r"# ?scope: ?geektg_min ([0-9]+\.[0-9]+\.[0-9]+)", doc
-            ).group(1)
+            )
+            if ver_match is None:
+                return
+            ver = ver_match.group(1)
             ver_ = tuple(map(int, ver.split(".")))
-            if main.__version__ < ver_:
-                await utils.answer(
-                    message, self.strings("version_incompatible").format(ver)
-                )
+            if getattr(main, "__version__", (0, 0, 0)) < ver_:
+                await utils.answer(message, self.tr("version_incompatible").format(ver))
                 return
 
         developer = re.search(r"# ?meta developer: ?(.+)", doc)
         developer = developer.group(1) if developer else False
-        developer = self.strings("developer").format(developer) if developer else ""
+        developer = self.tr("developer").format(developer) if developer else ""
 
         if name is None:
             uid = "__extmod_" + str(uuid.uuid4())
@@ -356,10 +362,13 @@ class LoaderMod(loader.Module):
                     exc_info=True,
                 )
                 # Let's try to reinstall dependencies
+                pkg_match = VALID_PIP_PACKAGES.search(doc)
+                if pkg_match is None:
+                    raise  # we don't know what to install
                 requirements = list(
                     filter(
                         lambda x: x and x[0] not in ("-", "_", "."),
-                        map(str.strip, VALID_PIP_PACKAGES.search(doc)[1].split(" ")),
+                        map(str.strip, pkg_match.group(1).split(" ")),
                     )
                 )
 
@@ -371,14 +380,14 @@ class LoaderMod(loader.Module):
                 if did_requirements:
                     if message is not None:
                         await utils.answer(
-                            message, self.strings("requirements_restart", message)
+                            message, self.tr("requirements_restart", message)
                         )
 
                     return True  # save to database despite failure
 
                 if message is not None:
                     await utils.answer(
-                        message, self.strings("requirements_installing", message)
+                        message, self.tr("requirements_installing", message)
                     )
 
                 rc = await utils.install_requirements(
@@ -388,7 +397,7 @@ class LoaderMod(loader.Module):
                 if rc != 0:
                     if message is not None:
                         await utils.answer(
-                            message, self.strings("requirements_failed", message)
+                            message, self.tr("requirements_failed", message)
                         )
 
                     return False
@@ -410,10 +419,13 @@ class LoaderMod(loader.Module):
             logger.exception("Loading external module failed: %s", e)
 
             if message is not None:
-                await utils.answer(message, self.strings("load_failed", message))
+                await utils.answer(message, self.tr("load_failed", message))
 
             return False
 
+        instance: Any = (
+            instance  # narrow: Module subclasses add .commands etc dynamically
+        )
         instance.inline = self.inline
         if hasattr(instance, "__version__") and isinstance(instance.__version__, tuple):
             version = (
@@ -440,13 +452,13 @@ class LoaderMod(loader.Module):
             logger.exception(f"Module threw because {e}")
 
             if message is not None:
-                await utils.answer(message, self.strings("load_failed", message))
+                await utils.answer(message, self.tr("load_failed", message))
 
             return False
 
         if message is not None:
             try:
-                modname = instance.strings("name", message)
+                modname = instance.tr("name", message)
             except KeyError:
                 modname = getattr(instance, "name", "ERROR")
 
@@ -459,26 +471,25 @@ class LoaderMod(loader.Module):
                 modhelp += f"<i>\nℹ️ {utils.escape_html(inspect.getdoc(instance))}</i>\n"
 
             if re.search(r"# ?scope: ?disable_onload_docs", doc):
-                return await utils.answer(
+                await utils.answer(
                     message,
-                    self.strings("loaded", message).format(
-                        modname.strip(), version, modhelp
-                    )
+                    self.tr("loaded", message).format(modname.strip(), version, modhelp)
                     + developer,
                 )
+                return True
 
             for _name, fun in instance.commands.items():
-                modhelp += self.strings("single_cmd", message).format(prefix, _name)
+                modhelp += self.tr("single_cmd", message).format(prefix, _name)
 
                 if fun.__doc__:
                     modhelp += utils.escape_html(inspect.getdoc(fun))
                 else:
-                    modhelp += self.strings("undoc_cmd", message)
+                    modhelp += self.tr("undoc_cmd", message)
 
             if self.inline.init_complete:
                 if hasattr(instance, "inline_handlers"):
                     for _name, fun in instance.inline_handlers.items():
-                        modhelp += self.strings("ihandler", message).format(
+                        modhelp += self.tr("ihandler", message).format(
                             f"@{self.inline._bot_username} {_name}"
                         )
 
@@ -487,44 +498,44 @@ class LoaderMod(loader.Module):
                                 "\n".join(
                                     [
                                         line.strip()
-                                        for line in inspect.getdoc(fun).splitlines()
+                                        for line in (
+                                            inspect.getdoc(fun) or ""
+                                        ).splitlines()
                                         if not line.strip().startswith("@")
                                     ]
                                 )
                             )
                         else:
-                            modhelp += self.strings("undoc_ihandler", message)
+                            modhelp += self.tr("undoc_ihandler", message)
 
                 if hasattr(instance, "callback_handlers"):
                     for _name, fun in instance.callback_handlers.items():
-                        modhelp += self.strings("chandler", message).format(_name)
+                        modhelp += self.tr("chandler", message).format(_name)
 
                         if fun.__doc__:
                             modhelp += utils.escape_html(
                                 "\n".join(
                                     [
                                         line.strip()
-                                        for line in inspect.getdoc(fun).splitlines()
+                                        for line in (
+                                            inspect.getdoc(fun) or ""
+                                        ).splitlines()
                                         if not line.strip().startswith("@")
                                     ]
                                 )
                             )
                         else:
-                            modhelp += self.strings("undoc_chandler", message)
+                            modhelp += self.tr("undoc_chandler", message)
 
             try:
                 await utils.answer(
                     message,
-                    self.strings("loaded", message).format(
-                        modname.strip(), version, modhelp
-                    )
+                    self.tr("loaded", message).format(modname.strip(), version, modhelp)
                     + developer,
                 )
             except telethon.errors.rpcerrorlist.MediaCaptionTooLongError:
                 await message.reply(
-                    self.strings("loaded", message).format(
-                        modname.strip(), version, modhelp
-                    )
+                    self.tr("loaded", message).format(modname.strip(), version, modhelp)
                     + developer
                 )
 
@@ -540,9 +551,10 @@ class LoaderMod(loader.Module):
             git_api = get_git_api(repo_url)
 
             if git_api is None:
-                return await utils.answer(message, self.strings("url_invalid", message))
+                await utils.answer(message, self.tr("url_invalid", message))
+                return
 
-            await utils.answer(message, self.strings("loading", message))
+            await utils.answer(message, self.tr("loading", message))
 
             if await self.load_repo(git_api):
                 self.ctx.db.set(
@@ -555,11 +567,11 @@ class LoaderMod(loader.Module):
                     ),
                 )
 
-                await utils.answer(message, self.strings("repo_loaded", message))
+                await utils.answer(message, self.tr("repo_loaded", message))
             else:
-                await utils.answer(message, self.strings("repo_not_loaded", message))
+                await utils.answer(message, self.tr("repo_not_loaded", message))
         else:
-            await utils.answer(message, self.strings("args_incorrect", message))
+            await utils.answer(message, self.tr("args_incorrect", message))
 
     @loader.owner
     async def unloadrepocmd(self, message: Message) -> None:
@@ -573,15 +585,14 @@ class LoaderMod(loader.Module):
             try:
                 repos.remove(repoUrl)
             except KeyError:
-                return await utils.answer(
-                    message, self.strings("repo_not_unloaded", message)
-                )
+                await utils.answer(message, self.tr("repo_not_unloaded", message))
+                return
 
             self.ctx.db.set(__name__, "loaded_repositories", list(repos))
 
-            await utils.answer(message, self.strings("repo_unloaded", message))
+            await utils.answer(message, self.tr("repo_unloaded", message))
         else:
-            await utils.answer(message, self.strings("args_incorrect", message))
+            await utils.answer(message, self.tr("args_incorrect", message))
 
     async def load_repo(self, git_api):
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
@@ -611,7 +622,7 @@ class LoaderMod(loader.Module):
         args = utils.get_args_raw(message)
 
         if not args:
-            await utils.answer(message, self.strings("no_class", message))
+            await utils.answer(message, self.tr("no_class", message))
             return
 
         worked = self.allmodules.unload_module(
@@ -630,7 +641,7 @@ class LoaderMod(loader.Module):
         self._move_modules(loaded_to_unloaded=without_prefix)
 
         await utils.answer(
-            message, self.strings("unloaded" if worked else "not_unloaded", message)
+            message, self.tr("unloaded" if worked else "not_unloaded", message)
         )
 
     def _move_modules(
@@ -678,7 +689,7 @@ class LoaderMod(loader.Module):
         self.ctx.db.set("friendly-telegram.modules.loader", "loaded_modules", [])
         self.ctx.db.set("friendly-telegram.modules.loader", "unloaded_modules", [])
 
-        await utils.answer(message, self.strings("all_modules_deleted", message))
+        await utils.answer(message, self.tr("all_modules_deleted", message))
 
         self.ctx.db.set(__name__, "chosen_preset", "none")
 
@@ -700,10 +711,14 @@ class LoaderMod(loader.Module):
 def get_module(module):
     name = module.name
     sysmod = sys.modules.get(module.__module__)
+    if sysmod is None or sysmod.__spec__ is None:
+        return [name, None, None]
     origin = sysmod.__spec__.origin
-    loader_ = sysmod.__loader__
+    loader_: Any = sysmod.__loader__
+    if loader_ is None:
+        return [name, None, None]
     cname = type(loader_).__name__
-    r = [name, None, None]
+    r: list = [name, None, None]
 
     if cname == "SourceFileLoader":
         r[1] = "path"

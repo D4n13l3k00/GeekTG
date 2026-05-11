@@ -11,7 +11,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 import telethon
 from telethon.errors import (
@@ -19,7 +19,7 @@ from telethon.errors import (
     MessageNotModifiedError,
     MessageTooLongError,
 )
-from telethon.tl.types import Message
+from telethon.tl.custom import Message
 
 from .. import loader, utils
 
@@ -79,10 +79,10 @@ class _MessageEditor:
     :class:`_RawMessageEditor` for raw passthrough output.
     """
 
-    message: object  # telethon Message or list of them; utils.answer normalises
+    message: Any  # telethon Message or list of them; utils.answer normalises
     command: str
     config: loader.ModuleConfig
-    strings: Callable
+    strings: Any  # callable Strings (post-tds) or dict pre-tds; both subscriptable
     request_message: Message
     stdout: str = ""
     stderr: str = ""
@@ -145,13 +145,15 @@ class _SudoMessageEditor(_MessageEditor):
             and _WRONG_PASS.fullmatch(lines[-2])
             and last_split[0] == _PASS_REQ
             and self.state == 1
+            and self.authmsg is not None
         ):
             await self.authmsg.edit(self.strings("auth_failed", self.request_message))
             self.state = 0
             handled = True
             await asyncio.sleep(2)
             with contextlib.suppress(Exception):
-                await self.authmsg.delete()
+                if self.authmsg is not None:
+                    await self.authmsg.delete()
 
         # First sudo password prompt.
         elif last_split[0] == _PASS_REQ and self.state == 0:
@@ -218,15 +220,22 @@ class _SudoMessageEditor(_MessageEditor):
             return
         # Password came in — wipe the visible copy and pipe it to sudo.
         try:
-            self.authmsg = await utils.answer(
+            ret = await utils.answer(
                 message, self.strings("auth_ongoing", self.request_message)
             )
+            if isinstance(ret, (list, tuple)) and ret:
+                first = ret[0]
+            else:
+                first = ret
+            self.authmsg = first if isinstance(first, Message) else None
         except MessageNotModifiedError:
             with contextlib.suppress(Exception):
                 await message.delete()
         self.state = 1
         if self.process and self.process.stdin:
-            password = message.message.split("\n", 1)[0].encode("utf-8") + b"\n"
+            raw = message.message
+            text = raw.split("\n", 1)[0] if raw else ""
+            password = text.encode("utf-8") + b"\n"
             self.process.stdin.write(password)
 
 
@@ -295,7 +304,7 @@ class TerminalMod(loader.Module):
         self.config = loader.ModuleConfig(
             "FLOOD_WAIT_PROTECT",
             2,
-            lambda m: self.strings("flood_wait_protect_cfg_doc", m),
+            lambda m: self.tr("flood_wait_protect_cfg_doc", m),
         )
         self.activecmds: Dict[str, asyncio.subprocess.Process] = {}
 
@@ -342,6 +351,7 @@ class TerminalMod(loader.Module):
         self.activecmds[key] = sproc
         try:
             await editor.redraw()
+            assert sproc.stdout is not None and sproc.stderr is not None
             await asyncio.gather(
                 _read_stream(
                     editor.update_stdout,
@@ -365,18 +375,23 @@ class TerminalMod(loader.Module):
     ) -> None:
         """Common backend for terminate/kill — locate process by reply-to msg."""
         if not message.is_reply:
-            return await utils.answer(message, self.strings("what_to_kill", message))
+            await utils.answer(message, self.tr("what_to_kill", message))
+            return
         reply = await message.get_reply_message()
+        if reply is None:
+            await utils.answer(message, self.tr("no_cmd", message))
+            return
         proc = self.activecmds.get(_hash_msg(reply))
         if proc is None:
-            return await utils.answer(message, self.strings("no_cmd", message))
+            await utils.answer(message, self.tr("no_cmd", message))
+            return
         try:
             send(proc)
         except Exception:
             logger.exception("signalling process failed")
-            await utils.answer(message, self.strings("kill_fail", message))
+            await utils.answer(message, self.tr("kill_fail", message))
         else:
-            await utils.answer(message, self.strings("killed", message))
+            await utils.answer(message, self.tr("killed", message))
 
     # --------------------------------------------------------------- commands
 

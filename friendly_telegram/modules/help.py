@@ -10,9 +10,11 @@ Licensed under the GNU GPLv3
 
 import inspect
 import logging
+from typing import Any
 
+from telethon.tl.custom import Message
 from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.tl.types import Message
+from telethon.tl.types import InputChannel, InputPeerChannel
 
 from .. import loader, main, security, utils
 
@@ -96,10 +98,11 @@ class HelpMod(loader.Module):
         return (self.ctx.db.get(main.__name__, "command_prefix", False) or ".")[0]
 
     async def _allowed_cmds(self, message, mod, force):
+        allmodules: Any = self.allmodules
         return [
             name
             for name, func in mod.commands.items()
-            if force or await self.allmodules.check_security(message, func)
+            if force or await allmodules.check_security(message, func)
         ]
 
     def _allowed_ihandlers(self, message, mod, force):
@@ -125,8 +128,9 @@ class HelpMod(loader.Module):
         prefix = utils.escape_html(self._prefix())
 
         if args:
-            return await self._render_single(message, args, prefix, force)
-        return await self._render_all(message, force)
+            await self._render_single(message, args, prefix, force)
+        else:
+            await self._render_all(message, force)
 
     async def _render_single(self, message, args, prefix, force):
         # 1) module by display name
@@ -142,26 +146,23 @@ class HelpMod(loader.Module):
                 target = handler.__self__
 
         if target is None:
-            return await utils.answer(
+            await utils.answer(
                 message,
-                self.strings("bad_module").format(utils.escape_html(args)),
+                self.tr("bad_module").format(utils.escape_html(args)),
             )
+            return
 
-        reply = self.strings("single_mod_header").format(
-            utils.escape_html(_modname(target))
-        )
+        reply = self.tr("single_mod_header").format(utils.escape_html(_modname(target)))
         if target.__doc__:
             reply += "<i>\nℹ️ " + utils.escape_html(inspect.getdoc(target)) + "\n</i>"
 
         for name, fun in (getattr(target, "inline_handlers", None) or {}).items():
-            reply += self.strings("ihandler").format(
-                f"@{self.inline.bot_username} {name}"
-            )
+            reply += self.tr("ihandler").format(f"@{self.inline.bot_username} {name}")
             reply += self._fmt_doc(fun, strip_at=True)
 
         for name in await self._allowed_cmds(message, target, force):
             fun = target.commands[name]
-            reply += self.strings("single_cmd").format(prefix, name)
+            reply += self.tr("single_cmd").format(prefix, name)
             reply += self._fmt_doc(fun)
 
         await utils.answer(message, reply)
@@ -169,7 +170,7 @@ class HelpMod(loader.Module):
     def _fmt_doc(self, fun, *, strip_at: bool = False) -> str:
         doc = inspect.getdoc(fun)
         if not doc:
-            return self.strings("undoc_cmd")
+            return self.tr("undoc_cmd")
         if strip_at:
             doc = "\n".join(
                 line.strip()
@@ -207,11 +208,11 @@ class HelpMod(loader.Module):
                 continue
 
             count += 1
-            line = self.strings("mod_tmpl").format(self._bullet(mod), name)
+            line = self.tr("mod_tmpl").format(self._bullet(mod), name)
             tokens = cmds + [f"🎹 {n}" for n in ihs]
             for i, tok in enumerate(tokens):
                 tmpl = "first_cmd_tmpl" if i == 0 else "cmd_tmpl"
-                line += self.strings(tmpl).format(tok)
+                line += self.tr(tmpl).format(tok)
             line += " )"
 
             if _is_core(mod):
@@ -224,8 +225,8 @@ class HelpMod(loader.Module):
         for key in groups:
             groups[key].sort(key=str.lower)
 
-        header = self.strings("all_header").format(count, 0 if force else len(hidden))
-        warn = self.strings("perm_warn") if perm_warn else ""
+        header = self.tr("all_header").format(count, 0 if force else len(hidden))
+        warn = self.tr("perm_warn") if perm_warn else ""
         body = "".join(groups["core"] + groups["plain"] + groups["inline"])
         await utils.answer(message, f"{warn}{header}\n{body}")
 
@@ -234,7 +235,8 @@ class HelpMod(loader.Module):
         *Split modules by spaces"""
         targets = utils.get_args(message)
         if not targets:
-            return await utils.answer(message, self.strings("no_mod"))
+            await utils.answer(message, self.tr("no_mod"))
+            return
 
         names = {_modname(m) for m in self.allmodules.modules if hasattr(m, "strings")}
         targets = [t for t in targets if t in names]
@@ -252,7 +254,7 @@ class HelpMod(loader.Module):
 
         await utils.answer(
             message,
-            self.strings("hidden_shown").format(
+            self.tr("hidden_shown").format(
                 len(added),
                 len(removed),
                 "\n".join(f"👁‍🗨 <i>{m}</i>" for m in added),
@@ -262,16 +264,25 @@ class HelpMod(loader.Module):
 
     async def supportcmd(self, message):
         """Joins the support GeekTG chat"""
-        is_owner = await self.allmodules.check_security(
+        allmodules: Any = self.allmodules
+        is_owner = await allmodules.check_security(
             message, security.OWNER | security.SUDO
         )
         if is_owner:
-            await self.ctx.client(JoinChannelRequest("https://t.me/GeekTGChat"))
+            peer = await self.ctx.client.get_input_entity("https://t.me/GeekTGChat")
+            if isinstance(peer, InputPeerChannel):
+                await self.ctx.client(
+                    JoinChannelRequest(
+                        InputChannel(
+                            channel_id=peer.channel_id, access_hash=peer.access_hash
+                        )
+                    )
+                )
 
         key = "joined" if is_owner else "join"
         try:
             await self.inline.form(
-                self.strings(key, message),
+                self.tr(key, message),
                 reply_markup=[
                     [{"text": "👩‍💼 Chat", "url": "https://t.me/GeekTGChat"}]
                 ],
@@ -279,4 +290,4 @@ class HelpMod(loader.Module):
                 message=message,
             )
         except Exception:
-            await utils.answer(message, self.strings(key, message))
+            await utils.answer(message, self.tr(key, message))

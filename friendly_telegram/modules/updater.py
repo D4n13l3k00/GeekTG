@@ -20,8 +20,9 @@ import logging
 import os
 import sys
 import uuid
+from typing import Awaitable, cast
 
-from telethon.tl.types import Message
+from telethon.tl.custom import Message
 
 from .. import loader, utils
 
@@ -51,15 +52,13 @@ class UpdaterMod(loader.Module):
         self.config = loader.ModuleConfig(
             "GIT_ORIGIN_URL",
             "https://github.com/D4n13l3k00/GeekTG",
-            lambda m: self.strings("origin_cfg_doc", m),
+            lambda m: self.tr("origin_cfg_doc", m),
         )
 
     @loader.owner
     async def restartcmd(self, message: Message) -> None:
         """Restarts the userbot."""
-        msg = (
-            await utils.answer(message, self.strings("restarting_caption", message))
-        )[0]
+        msg = (await utils.answer(message, self.tr("restarting_caption", message)))[0]
         await self.restart_common(msg)
 
     async def prerestart_common(self, message: Message) -> None:
@@ -81,15 +80,20 @@ class UpdaterMod(loader.Module):
         # We tolerate a missing handler — some test harnesses don't install one.
         for handler in logging.getLogger().handlers:
             handler.setLevel(logging.CRITICAL)
+        # ``disconnect()`` returns a coroutine when called inside a running
+        # loop (always true for us); the type stub widens it to
+        # ``Awaitable | None`` to also cover the sync entry point. Cast it.
         for client in self.allclients:
             if client is not message.client:
-                await client.disconnect()
-        await message.client.disconnect()
+                await cast(Awaitable[None], client.disconnect())
+        client = message.client
+        if client is not None:
+            await cast(Awaitable[None], client.disconnect())
 
     @loader.owner
     async def updatecmd(self, message: Message) -> None:
         """Self-update — not implemented yet."""
-        await utils.answer(message, self.strings("not_implemented", message))
+        await utils.answer(message, self.tr("not_implemented", message))
 
     # Same body — preserved as separate command for muscle memory (.update / .download).
     downloadcmd = updatecmd
@@ -99,7 +103,7 @@ class UpdaterMod(loader.Module):
         """Links the source code of this project."""
         await utils.answer(
             message,
-            self.strings("source", message).format(self.config["GIT_ORIGIN_URL"]),
+            self.tr("source", message).format(self.config["GIT_ORIGIN_URL"]),
         )
 
     async def client_ready(self, client, db):
@@ -124,7 +128,7 @@ class UpdaterMod(loader.Module):
         await client.edit_message(
             self.ctx.db.get(__name__, "selfupdatechat"),
             self.ctx.db.get(__name__, "selfupdatemsg"),
-            self.strings("success"),
+            self.tr("success"),
         )
 
 

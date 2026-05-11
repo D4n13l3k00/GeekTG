@@ -22,7 +22,7 @@ import re
 import time
 from importlib.resources import files  # noqa: F401
 from types import FunctionType  # noqa: F401
-from typing import Any, List, Union  # noqa: F401
+from typing import Any, List, Optional, Union  # noqa: F401
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -44,8 +44,8 @@ from telethon.errors.rpcerrorlist import (
     InputUserDeactivatedError,
     YouBlockedUserError,
 )
+from telethon.tl.custom import Message
 from telethon.tl.functions.contacts import UnblockRequest
-from telethon.tl.types import Message
 from telethon.utils import get_display_name
 
 from .. import utils
@@ -960,12 +960,12 @@ class InlineManager:
     async def form(
         self,
         text: str,
-        message: Union[Message, int],
-        reply_markup: List[List[dict]] = None,
+        message: Union[Message, InlineCall, int],
+        reply_markup: Optional[List[List[dict]]] = None,
         force_me: bool = True,
-        always_allow: List[int] = None,
+        always_allow: Optional[List[int]] = None,
         ttl: Union[int, bool] = False,
-        photo: str = None,
+        photo: Optional[str] = None,
     ) -> Union[str, bool]:
         """Creates inline form with callback
         Args:

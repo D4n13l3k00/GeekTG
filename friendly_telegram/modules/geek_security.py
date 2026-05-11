@@ -10,9 +10,10 @@ Licensed under the GNU GPLv3
 
 import logging
 from types import FunctionType
-from typing import List, Union
+from typing import Any, List, Optional, Union
 
-from telethon.tl.types import Message, PeerUser, User
+from telethon.tl.custom import Message
+from telethon.tl.types import User
 from telethon.utils import get_display_name
 
 from .. import loader, main, security, utils
@@ -97,12 +98,13 @@ class GeekSecurityMod(loader.Module):
         }
 
     def _current_cmd_mask(self, cmd: FunctionType) -> int:
+        client: Any = self.ctx.client
         return self.ctx.db.get(security.__name__, "masks", {}).get(
             self._cmd_key(cmd),
             getattr(
                 cmd,
                 "security",
-                self.ctx.client.dispatcher.security._default,  # noqa: SLF001
+                client.dispatcher.security._default,  # noqa: SLF001
             ),
         )
 
@@ -121,7 +123,7 @@ class GeekSecurityMod(loader.Module):
             for group, level in perms.items()
         ]
         return chunks(buttons, 2) + [
-            [{"text": self.strings("close_menu"), "callback": self.inline_close}]
+            [{"text": self.tr("close_menu"), "callback": self.inline_close}]
         ]
 
     def _build_markup(self, command: FunctionType) -> List[List[dict]]:
@@ -149,7 +151,7 @@ class GeekSecurityMod(loader.Module):
 
         await call.answer("Security value set!")
         await call.edit(
-            self.strings("permissions").format(self.prefix, command),
+            self.tr("permissions").format(self.prefix, command),
             reply_markup=self._build_markup(cmd),
         )
 
@@ -161,9 +163,7 @@ class GeekSecurityMod(loader.Module):
         self.ctx.db.set(security.__name__, "bounding_mask", new)
 
         await call.answer("Bounding mask value set!")
-        await call.edit(
-            self.strings("global"), reply_markup=self._build_markup_global()
-        )
+        await call.edit(self.tr("global"), reply_markup=self._build_markup_global())
 
     @staticmethod
     async def inline_close(call: InlineCall) -> None:
@@ -175,12 +175,12 @@ class GeekSecurityMod(loader.Module):
         """[command] - Configure command's security settings"""
         args = utils.get_args_raw(message).lower().strip()
         if args and args not in self.allmodules.commands:
-            await utils.answer(message, self.strings("no_command").format(args))
+            await utils.answer(message, self.tr("no_command").format(args))
             return
 
         if not args:
             await self.inline.form(
-                self.strings("global"),
+                self.tr("global"),
                 reply_markup=self._build_markup_global(),
                 message=message,
                 ttl=5 * 60,
@@ -189,7 +189,7 @@ class GeekSecurityMod(loader.Module):
 
         cmd = self.allmodules.commands[args]
         await self.inline.form(
-            self.strings("permissions").format(self.prefix, args),
+            self.tr("permissions").format(self.prefix, args),
             reply_markup=self._build_markup(cmd),
             message=message,
             ttl=5 * 60,
@@ -197,12 +197,12 @@ class GeekSecurityMod(loader.Module):
 
     # ------------------------------------------------------------ user mgmt
 
-    async def _resolve_user(self, message: Message):
+    async def _resolve_user(self, message: Message) -> Optional[User]:
         reply = await message.get_reply_message()
-        args = utils.get_args_raw(message)
+        args: Union[str, int] = utils.get_args_raw(message)
 
         if not args and not reply:
-            await utils.answer(message, self.strings("no_user"))
+            await utils.answer(message, self.tr("no_user"))
             return None
 
         user = None
@@ -216,21 +216,21 @@ class GeekSecurityMod(loader.Module):
 
         if user is None:
             if reply is None:
-                await utils.answer(message, self.strings("not_a_user"))
+                await utils.answer(message, self.tr("not_a_user"))
                 return None
             try:
                 user = await self.ctx.client.get_entity(reply.sender_id)
             except Exception:
                 logger.debug("reply entity lookup failed", exc_info=True)
-                await utils.answer(message, self.strings("not_a_user"))
+                await utils.answer(message, self.tr("not_a_user"))
                 return None
 
-        if not isinstance(user, (User, PeerUser)):
-            await utils.answer(message, self.strings("not_a_user"))
+        if not isinstance(user, User):
+            await utils.answer(message, self.tr("not_a_user"))
             return None
 
         if user.id == self._me:
-            await utils.answer(message, self.strings("self"))
+            await utils.answer(message, self.tr("self"))
             return None
 
         return user
@@ -248,42 +248,50 @@ class GeekSecurityMod(loader.Module):
         message: Union[Message, InlineCall],
         group: str,
         confirmed: bool = False,
-        user: int = None,
+        user: Optional[Union[int, User]] = None,
     ) -> None:
+        entity: User
         if user is None:
-            user = await self._resolve_user(message)
-            if not user:
+            if not isinstance(message, Message):
                 return
-
-        if isinstance(user, int):
-            user = await self.ctx.client.get_entity(user)
+            resolved = await self._resolve_user(message)
+            if resolved is None:
+                return
+            entity = resolved
+        elif isinstance(user, int):
+            looked_up = await self.ctx.client.get_entity(user)
+            if not isinstance(looked_up, User):
+                return
+            entity = looked_up
+        else:
+            entity = user
 
         if not confirmed:
             await self.inline.form(
-                self.strings("warning").format(
-                    user.id, utils.escape_html(get_display_name(user)), group
+                self.tr("warning").format(
+                    entity.id, utils.escape_html(get_display_name(entity)), group
                 ),
                 message=message,
                 ttl=10 * 60,
                 reply_markup=[
                     [
                         {
-                            "text": self.strings("cancel"),
+                            "text": self.tr("cancel"),
                             "callback": self.inline_close,
                         },
                         {
-                            "text": self.strings("confirm"),
+                            "text": self.tr("confirm"),
                             "callback": self._add_to_group,
-                            "args": (group, True, user.id),
+                            "args": (group, True, entity.id),
                         },
                     ]
                 ],
             )
             return
 
-        self._group_add(group, user.id)
-        text = self.strings(f"{group}_added").format(
-            user.id, utils.escape_html(get_display_name(user))
+        self._group_add(group, entity.id)
+        text = self.tr(f"{group}_added").format(
+            entity.id, utils.escape_html(get_display_name(entity))
         )
         if isinstance(message, Message):
             await utils.answer(message, text)
@@ -297,7 +305,7 @@ class GeekSecurityMod(loader.Module):
         self._group_remove(group, user.id)
         await utils.answer(
             message,
-            self.strings(f"{group}_removed").format(
+            self.tr(f"{group}_removed").format(
                 user.id, utils.escape_html(get_display_name(user))
             ),
         )
@@ -315,14 +323,14 @@ class GeekSecurityMod(loader.Module):
                 logger.debug("group %s: entity %s missing", group, uid, exc_info=True)
 
         if not resolved:
-            await utils.answer(message, self.strings(f"no_{group}"))
+            await utils.answer(message, self.tr(f"no_{group}"))
             return
 
         body = "\n".join(
-            self.strings("li").format(u.id, utils.escape_html(get_display_name(u)))
+            self.tr("li").format(u.id, utils.escape_html(get_display_name(u)))
             for u in resolved
         )
-        await utils.answer(message, self.strings(f"{group}_list").format(body))
+        await utils.answer(message, self.tr(f"{group}_list").format(body))
 
     async def sudoaddcmd(self, message: Message) -> None:
         """<user> - Add user to `sudo`"""

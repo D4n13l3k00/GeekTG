@@ -10,6 +10,7 @@ exercise.
 import asyncio
 import inspect
 from importlib.resources import files
+from typing import Any, Optional, cast
 
 import aiohttp_jinja2
 import jinja2
@@ -44,8 +45,8 @@ class Web:
             default_app=default_app,
             proxy=proxy,
         )
-        self.runner = None
-        self.port = None
+        self.runner: Optional[web.AppRunner] = None
+        self.port: Optional[int] = None
         self.running = asyncio.Event()
         # ``ready`` is consumed by main.py and InitialSetupRouter.root —
         # keep it on ctx so all routers see the same Event.
@@ -54,7 +55,9 @@ class Web:
         self.app = web.Application()
         aiohttp_jinja2.setup(
             self.app,
-            filters={"getdoc": inspect.getdoc, "ascii": ascii},
+            # jinja2's Filter protocol is narrower than what these stdlib
+            # callables advertise; cast satisfies the static checker.
+            filters=cast(Any, {"getdoc": inspect.getdoc, "ascii": ascii}),
             loader=jinja2.PackageLoader("friendly_telegram.web", "templates"),
         )
 
@@ -133,8 +136,9 @@ class Web:
         self.running.set()
 
     async def stop(self):
-        await self.runner.shutdown()
-        await self.runner.cleanup()
+        if self.runner is not None:
+            await self.runner.shutdown()
+            await self.runner.cleanup()
         self.running.clear()
         self.ready.clear()
 

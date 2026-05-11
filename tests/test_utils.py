@@ -24,14 +24,15 @@ class TestGetArgs:
         ]
 
     def test_unbalanced_quote_returns_raw(self):
-        # shlex raises ValueError → falls back to the whole arg-string
-        assert utils.get_args(make_message('.cmd "broken')) == '"broken'
+        # shlex raises ValueError → falls back to a single-element list with
+        # the whole tail so callers can still index/len without crashing.
+        assert utils.get_args(make_message('.cmd "broken')) == ['"broken']
 
     def test_string_input_works(self):
         assert utils.get_args(".cmd foo bar") == ["foo", "bar"]
 
-    def test_empty_message_returns_false(self):
-        assert utils.get_args(make_message("")) is False
+    def test_empty_message_returns_empty_list(self):
+        assert utils.get_args(make_message("")) == []
 
 
 class TestGetArgsRaw:

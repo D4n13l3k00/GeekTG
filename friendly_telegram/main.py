@@ -28,8 +28,10 @@ import signal
 import socket
 import sqlite3
 import sys
+from typing import Any
 
-from telethon import TelegramClient, events
+from telethon import TelegramClient as _TelegramClient
+from telethon import events
 from telethon.errors.rpcerrorlist import (
     ApiIdInvalidError,
     AuthKeyDuplicatedError,
@@ -46,6 +48,13 @@ from ._device import telethon_kwargs as _device_kwargs
 from .database import backend, frontend
 from .dispatcher import CommandDispatcher
 from .translations.core import Translator
+
+# Telethon's distributed stubs are stricter than its runtime: many ``__init__``
+# kwargs are typed as ``int``/``bool`` (no ``None``) and ``client.start()``
+# returns ``TelegramClient`` rather than an awaitable. We use ``TelegramClient``
+# as ``Any`` at construction sites and rely on runtime behaviour matching the
+# documented signatures.
+TelegramClient: Any = _TelegramClient
 
 BASE_DIR = utils.get_data_dir()
 
@@ -257,7 +266,7 @@ def get_api_token(arguments, use_default_app=False):
             api_token = api_token_type(*[line.strip() for line in f.readlines()])
     except FileNotFoundError:
         try:
-            from . import api_token
+            from . import api_token  # type: ignore[attr-defined]
         except ImportError:
             try:
                 api_token = api_token_type(os.environ["api_id"], os.environ["api_hash"])
@@ -630,7 +639,8 @@ async def amain(first, client, allclients, web, arguments):
             # Setup cancelled — wipe the local config file for this account
             # (no Telegram channel to delete anymore).
             try:
-                os.remove(db._db_path)
+                if db._db_path is not None:
+                    os.remove(db._db_path)
             except FileNotFoundError:
                 pass
             return
@@ -643,7 +653,7 @@ async def amain(first, client, allclients, web, arguments):
 
     logging.info("Loading logging config...")
     for handler in handlers:
-        handler.setLevel(db.get(__name__, "loglevel", logging.INFO))
+        handler.setLevel(db.get(__name__, "loglevel", logging.INFO) or logging.INFO)
 
     to_load = None
 

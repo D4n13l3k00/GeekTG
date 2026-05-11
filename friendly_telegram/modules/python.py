@@ -10,10 +10,13 @@ import itertools
 import logging
 from traceback import format_exc
 from types import ModuleType
+from typing import Any
 
 import telethon
 from meval import meval
-from telethon.tl.types import Message
+from telethon.tl import functions as tl_functions
+from telethon.tl import types as tl_types
+from telethon.tl.custom import Message
 
 from .. import loader, main, utils
 from ..inline.types import InlineCall
@@ -66,13 +69,14 @@ class PythonMod(loader.Module):
     @loader.owner
     async def ecmd(self, message: Message) -> None:
         """Evaluates python code"""
-        phone = str(self.ctx.client.phone or "")
+        client: Any = self.ctx.client
+        phone = str(getattr(client, "phone", None) or "")
         code = utils.get_args_raw(message)
         try:
             it = await meval(code, globals(), **await self.getattrs(message))
         except FakeDbException:
             await self.inline.form(
-                self.strings("db_permission"),
+                self.tr("db_permission"),
                 message=message,
                 reply_markup=[
                     [
@@ -88,13 +92,13 @@ class PythonMod(loader.Module):
                 exc = exc.replace(phone, "📵")
             await utils.answer(
                 message,
-                self.strings("err", message).format(
+                self.tr("err", message).format(
                     utils.escape_html(code), utils.escape_html(exc)
                 ),
             )
             return
 
-        ret = self.strings("eval", message).format(
+        ret = self.tr("eval", message).format(
             utils.escape_html(code), utils.escape_html(str(it))
         )
         if phone:
@@ -121,14 +125,14 @@ class PythonMod(loader.Module):
                 "client": self.ctx.client,
                 "reply": reply,
                 "r": reply,
-                **self.get_sub(telethon.tl.types),
-                **self.get_sub(telethon.tl.functions),
+                **self.get_sub(tl_types),
+                **self.get_sub(tl_functions),
                 "event": message,
                 "chat": message.to_id,
                 "telethon": telethon,
                 "utils": utils,
                 "main": main,
-                "f": telethon.tl.functions,
+                "f": tl_functions,
                 "c": self.ctx.client,
                 "m": message,
                 "loader": loader,

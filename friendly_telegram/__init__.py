@@ -14,6 +14,7 @@ so:
 """
 
 import importlib as _importlib
+import importlib.util as _importlib_util
 import sys as _sys
 
 __version__ = (4, 1, 4)
@@ -38,7 +39,7 @@ class _LegacyAliasFinder:
         real_name = _REAL + fullname[len(_LEGACY) :]
         real_mod = _importlib.import_module(real_name)
         _sys.modules[fullname] = real_mod
-        return _importlib.util.spec_from_loader(fullname, loader=None, origin=real_name)
+        return _importlib_util.spec_from_loader(fullname, loader=None, origin=real_name)
 
     def load_module(self, fullname):  # noqa: D401  (legacy hook)
         return _sys.modules[fullname]
