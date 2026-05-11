@@ -228,13 +228,15 @@ class HelloMod(loader.Module):
 1. ✅ Поднять установку и запуск на Python 3.9 – 3.13.
 2. ✅ Выпилить внешние зависимости, которых больше нет (Heroku, Okteto, Telethon-Mod).
 3. ✅ Локальное хранилище, дружелюбнее первый запуск.
-4. 🟡 Лучший DX для авторов модулей — type hints, ruff/black/isort через
-   pre-commit, поменьше монолитов (`inline.py` уже разбит на `inline/`,
-   `dispatcher.py` следующий).
+4. ✅ Лучший DX для авторов модулей — type hints по всему core,
+   ruff/black/isort через pre-commit, `inline.py` разбит на `inline/`.
+   (`dispatcher.py` пока один файл на ~430 строк, но плоский и читаемый —
+   разбивать не срочно.)
 5. 🟡 Настоящий self-update для wheel-инсталлов (сейчас заглушка, отсылающая
    к `uv tool upgrade`).
-6. 🟡 Обновление документации — upstream `docs.geektg.tk` оффлайн; новые
-   доки живут под [`docs/`](docs/).
+6. ✅ Обновление документации — двуязычные (en/ru) доки под [`docs/`](docs/),
+   сайт на MkDocs Material собирается из `mkdocs.yml`, деплой на
+   <https://d4n13l3k00.github.io/GeekTG/> на push в `master`.
 
 Issues и PR приветствуются. Если ты поддерживал сторонний FTG-модуль и
 после рефреша что-то сломалось — открой issue с трейсбэком; обратная

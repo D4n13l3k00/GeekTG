@@ -2,7 +2,7 @@ name: docs
 
 on:
   push:
-    branches: [dev, main]
+    branches: [master]
     paths:
       - "docs/**"
       - "mkdocs.yml"
@@ -35,7 +35,7 @@ jobs:
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

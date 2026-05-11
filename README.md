@@ -229,13 +229,15 @@ This is a maintenance / modernization fork. Goals, in order:
 1. ✅ Make it install and boot on Python 3.9 – 3.13 (done).
 2. ✅ Drop external dependencies that no longer exist (Heroku, Okteto, Telethon-Mod).
 3. ✅ Local-only data store, friendlier first-run experience.
-4. 🟡 Better module developer UX — type hints, ruff/black/isort wired via
-   pre-commit, smaller monoliths (`inline.py` split into `inline/`,
-   `dispatcher.py` next).
+4. ✅ Better module developer UX — type hints across core, ruff/black/isort
+   wired via pre-commit, `inline.py` split into `inline/`. (`dispatcher.py`
+   is still a single ~430-line file but it's flat and readable; splitting
+   isn't urgent.)
 5. 🟡 Real self-update path that works for wheel installs (currently a stub
    pointing at `uv tool upgrade`).
-6. 🟡 Documentation refresh — the upstream `docs.geektg.tk` is offline; new
-   docs will live under [`docs/`](docs/).
+6. ✅ Documentation refresh — bilingual (en/ru) docs under [`docs/`](docs/),
+   MkDocs Material site auto-built from `mkdocs.yml`, deployed to
+   <https://d4n13l3k00.github.io/GeekTG/> on push to `master`.
 
 Issues and PRs welcome. If you maintained a third-party FTG module and
 something broke after this refresh, open an issue with a stack trace —

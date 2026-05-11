@@ -16,9 +16,10 @@ Documentation for people writing modules or hacking on the userbot itself.
 
 ## User docs
 
-User-facing documentation (commands, screenshots, video tutorials) used to
-live at `docs.geektg.tk`. That host is offline. New user docs will land
-here as plain Markdown — PRs welcome.
+User-facing documentation lives here as plain Markdown — PRs welcome.
+
+A rendered Material site is published from this tree on every push to
+`master` at <https://d4n13l3k00.github.io/GeekTG/>.
 
 ## Codebase tour
 
