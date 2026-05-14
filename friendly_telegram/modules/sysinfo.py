@@ -154,6 +154,122 @@ def _hostname() -> str:
         return "localhost"
 
 
+def _read_proc_stat() -> Dict[str, tuple]:
+    """Parse ``/proc/stat`` into ``{'cpu': (...), 'cpu0': (...), ...}``."""
+    out: Dict[str, tuple] = {}
+    try:
+        with open("/proc/stat", "r", encoding="utf-8") as fh:
+            for line in fh:
+                if not line.startswith("cpu"):
+                    break
+                parts = line.split()
+                if len(parts) < 5:
+                    continue
+                try:
+                    out[parts[0]] = tuple(int(x) for x in parts[1:])
+                except ValueError:
+                    continue
+    except OSError:
+        pass
+    return out
+
+
+def _cpu_pct(t1: Optional[tuple], t2: Optional[tuple]) -> Optional[float]:
+    """Convert two ``/proc/stat`` cpu rows into a busy-% delta."""
+    if not t1 or not t2:
+        return None
+    idle1 = t1[3] + (t1[4] if len(t1) > 4 else 0)
+    idle2 = t2[3] + (t2[4] if len(t2) > 4 else 0)
+    total1 = sum(t1)
+    total2 = sum(t2)
+    dt = total2 - total1
+    di = idle2 - idle1
+    if dt <= 0:
+        return 0.0
+    return round(max(0.0, min(100.0, (1.0 - di / dt) * 100.0)), 1)
+
+
+def _read_pid_stat(pid: int) -> Optional[tuple]:
+    """Return ``(utime, stime, starttime)`` (clock ticks) from ``/proc/<pid>/stat``.
+
+    The ``comm`` field can contain spaces and even closing-parens, so we
+    split from the **last** ``)`` to keep field offsets stable.
+    """
+    try:
+        with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as fh:
+            data = fh.read()
+    except OSError:
+        return None
+    rp = data.rfind(")")
+    if rp < 0:
+        return None
+    rest = data[rp + 2 :].split()
+    # man 5 proc: utime=14, stime=15, starttime=22 (1-indexed; pid+comm
+    # consumed → subtract 3 to index into ``rest``).
+    try:
+        return (int(rest[11]), int(rest[12]), int(rest[19]))
+    except (IndexError, ValueError):
+        return None
+
+
+def _proc_cpuinfo_freq_mhz() -> Optional[float]:
+    try:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as fh:
+            for raw in fh:
+                if raw.startswith("cpu MHz"):
+                    _, _, val = raw.partition(":")
+                    try:
+                        return float(val.strip())
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return None
+
+
+def _proc_net_dev() -> Dict[str, Dict[str, int]]:
+    """Parse ``/proc/net/dev`` into ``{iface: {bytes_recv, ...}}``."""
+    out: Dict[str, Dict[str, int]] = {}
+    try:
+        with open("/proc/net/dev", "r", encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return out
+    for raw in lines[2:]:  # skip the two header rows
+        name, sep, rest = raw.partition(":")
+        if not sep:
+            continue
+        parts = rest.split()
+        if len(parts) < 16:
+            continue
+        try:
+            out[name.strip()] = {
+                "bytes_recv": int(parts[0]),
+                "packets_recv": int(parts[1]),
+                "bytes_sent": int(parts[8]),
+                "packets_sent": int(parts[9]),
+            }
+        except ValueError:
+            continue
+    return out
+
+
+def _iface_ipv4(name: str) -> Optional[str]:
+    """``ioctl(SIOCGIFADDR)`` — Linux-only, silently skips elsewhere."""
+    try:
+        import fcntl  # noqa: WPS433
+        import struct  # noqa: WPS433
+    except ImportError:
+        return None
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            packed = struct.pack("256s", name.encode("utf-8")[:15])
+            res = fcntl.ioctl(s.fileno(), 0x8915, packed)  # SIOCGIFADDR
+            return socket.inet_ntoa(res[20:24])
+    except OSError:
+        return None
+
+
 def _collect_snapshot(data_dir: str) -> Dict[str, Any]:
     """Run all blocking probes in one shot — call via ``run_sync``."""
     psutil = _try_psutil()
@@ -224,10 +340,28 @@ def _collect_snapshot(data_dir: str) -> Dict[str, Any]:
             cpu["loadavg"] = (round(la[0], 2), round(la[1], 2), round(la[2], 2))
         except OSError:
             cpu["loadavg"] = None
-        cpu["freq_mhz"] = None
+        cpu["freq_mhz"] = _proc_cpuinfo_freq_mhz()
         cpu["freq_max_mhz"] = None
-        cpu["percent_total"] = None
-        cpu["percent_per_core"] = []
+
+        # CPU% via two /proc/stat samples, 150 ms apart. Total + per-core
+        # in one shot — same call into _read_proc_stat twice.
+        s1 = _read_proc_stat()
+        proc_pid = os.getpid()
+        pid_s1 = _read_pid_stat(proc_pid)
+        time.sleep(0.15)
+        s2 = _read_proc_stat()
+        pid_s2 = _read_pid_stat(proc_pid)
+
+        cpu["percent_total"] = _cpu_pct(s1.get("cpu"), s2.get("cpu"))
+        per: List[float] = []
+        for key in sorted(s2.keys()):
+            if key == "cpu":
+                continue
+            value = _cpu_pct(s1.get(key), s2.get(key))
+            if value is not None:
+                per.append(value)
+        cpu["percent_per_core"] = per
+        snap["_pid_samples"] = (pid_s1, pid_s2)
 
     mem = snap["memory"]
     sw = snap["swap"]
@@ -313,6 +447,31 @@ def _collect_snapshot(data_dir: str) -> Dict[str, Any]:
             snap["net"]["ifaces"] = iface_summary[:6]
         except Exception:
             snap["net"]["ifaces"] = []
+    else:
+        ifaces = _proc_net_dev()
+        if ifaces:
+            totals = {
+                "bytes_sent": 0,
+                "bytes_recv": 0,
+                "packets_sent": 0,
+                "packets_recv": 0,
+            }
+            for name, stats in ifaces.items():
+                if name == "lo":
+                    continue
+                for key, value in stats.items():
+                    totals[key] += value
+            snap["net"].update(totals)
+            iface_summary = []
+            for name in ifaces:
+                if name == "lo":
+                    continue
+                ip = _iface_ipv4(name)
+                if ip:
+                    iface_summary.append((name, ip))
+            snap["net"]["ifaces"] = iface_summary[:6]
+        else:
+            snap["net"]["ifaces"] = []
 
     if psutil is not None:
         try:
@@ -336,32 +495,61 @@ def _collect_snapshot(data_dir: str) -> Dict[str, Any]:
         except Exception:
             logger.debug("psutil.Process probe failed", exc_info=True)
     if not snap["proc"]:
+        pid = os.getpid()
+        proc_info: Dict[str, Any] = {"pid": pid}
         try:
-            with open(f"/proc/{os.getpid()}/status", "r", encoding="utf-8") as fh:
-                rss = 0
-                threads = 0
+            with open(f"/proc/{pid}/status", "r", encoding="utf-8") as fh:
                 for raw in fh:
                     if raw.startswith("VmRSS:"):
                         try:
-                            rss = int(raw.split()[1]) * 1024
+                            proc_info["rss"] = int(raw.split()[1]) * 1024
+                        except (IndexError, ValueError):
+                            pass
+                    elif raw.startswith("VmSize:"):
+                        try:
+                            proc_info["vms"] = int(raw.split()[1]) * 1024
                         except (IndexError, ValueError):
                             pass
                     elif raw.startswith("Threads:"):
                         try:
-                            threads = int(raw.split()[1])
+                            proc_info["threads"] = int(raw.split()[1])
                         except (IndexError, ValueError):
                             pass
-                snap["proc"] = {
-                    "pid": os.getpid(),
-                    "rss": rss,
-                    "vms": None,
-                    "threads": threads,
-                    "cpu_percent": None,
-                    "uptime": None,
-                    "fds": None,
-                }
         except OSError:
-            snap["proc"] = {"pid": os.getpid()}
+            pass
+
+        try:
+            proc_info["fds"] = len(os.listdir(f"/proc/{pid}/fd"))
+        except OSError:
+            proc_info["fds"] = None
+
+        # Uptime + CPU% via /proc/<pid>/stat. starttime is in clock ticks
+        # since boot; subtract from now-vs-boot.
+        pid_samples = snap.pop("_pid_samples", (None, None))
+        pid_s1, pid_s2 = pid_samples
+        if pid_s2 is None:
+            pid_s2 = _read_pid_stat(pid)
+        if pid_s2 is not None:
+            try:
+                ticks = os.sysconf("SC_CLK_TCK") or 100
+            except (ValueError, OSError):
+                ticks = 100
+            if boot:
+                proc_uptime = max(0.0, time.time() - boot - pid_s2[2] / ticks)
+                proc_info["uptime"] = proc_uptime
+            if pid_s1 is not None:
+                used = (pid_s2[0] + pid_s2[1]) - (pid_s1[0] + pid_s1[1])
+                # 0.15s sample interval — same one used for /proc/stat above.
+                proc_cpu = (used / ticks) / 0.15 * 100.0
+                proc_info["cpu_percent"] = round(max(0.0, proc_cpu), 1)
+
+        proc_info.setdefault("rss", None)
+        proc_info.setdefault("vms", None)
+        proc_info.setdefault("threads", None)
+        proc_info.setdefault("uptime", None)
+        proc_info.setdefault("cpu_percent", None)
+        snap["proc"] = proc_info
+    snap.pop("_pid_samples", None)
 
     return snap
 
@@ -569,7 +757,7 @@ class SysInfoMod(loader.Module):
         "name": "SysInfo",
         "footer": "\n\n🕓 <i>Updated: <code>{ts}</code></i>",
         "psutil_missing": (
-            "\n\n⚠️ <i>psutil not installed — some metrics are unavailable.</i>"
+            "\n\n⚠️ <i>psutil not installed — using /proc fallbacks.</i>"
         ),
         "title_overview": "🖥 Overview",
         "title_cpu": "⚡ CPU",
