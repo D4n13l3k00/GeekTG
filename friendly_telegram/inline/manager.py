@@ -819,11 +819,14 @@ class InlineManager:
             return
 
         form_state = self._forms[query]
+        # Use the form_uid as the result id so ``_chosen_inline_handler``
+        # can map the chosen result back to its form and capture the
+        # ``inline_message_id`` we need for the post-send refresh edit.
         await inline_query.answer(
             (
                 [
                     InlineQueryResultPhoto(
-                        id=rand(20),
+                        id=query,
                         title="GeekTG",
                         photo_url=form_state["photo"],
                         caption=form_state["text"],
@@ -834,7 +837,7 @@ class InlineManager:
                 if form_state["photo"]
                 else [
                     InlineQueryResultArticle(
-                        id=rand(20),
+                        id=query,
                         title="GeekTG",
                         input_message_content=InputTextMessageContent(
                             message_text=form_state["text"],
@@ -941,6 +944,19 @@ class InlineManager:
         self, chosen_inline_query: ChosenInlineResult
     ) -> None:
         query = chosen_inline_query.query
+        result_id = chosen_inline_query.result_id
+
+        # When the user actually triggers our inline result, Telegram hands
+        # us its ``inline_message_id`` here. ``form()`` is parked on the
+        # corresponding asyncio.Event waiting for it so it can do its
+        # post-send refresh edit (the only path that keeps custom-emoji
+        # entities; the ``SendInlineBotResultRequest`` path strips them).
+        form = self._forms.get(result_id)
+        if form is not None:
+            form["inline_message_id"] = chosen_inline_query.inline_message_id
+            event = form.get("_chosen_event")
+            if event is not None:
+                event.set()
 
         for form_uid, form in self._forms.copy().items():
             for button in array_sum(form.get("buttons", [])):
@@ -1097,6 +1113,8 @@ class InlineManager:
             "always_allow": always_allow,
             "chat": None,
             "message_id": None,
+            "inline_message_id": None,
+            "_chosen_event": asyncio.Event(),
             "photo": photo,
             "uid": form_uid,
         }
@@ -1137,25 +1155,28 @@ class InlineManager:
             await message.delete()
 
         # First-render workaround for animated custom emoji.
-        # ``SendInlineBotResultRequest`` builds the message from the bot's
-        # ``InputTextMessageContent`` and silently drops MessageEntityCustomEmoji
-        # along the way — even though the bot owner has Premium and Bot API
-        # 9.4 would otherwise allow them. ``editMessageText`` honours them
-        # (see callbacks via ``call.edit``), so we re-issue the same body
-        # via the bot right after the inline send. One extra RPC, no
-        # visual flicker.
+        # ``SendInlineBotResultRequest`` strips MessageEntityCustomEmoji on
+        # the way through, so the very first render is plain — even though
+        # ``editMessageText`` would happily honour them (which is why
+        # ``call.edit`` after a button click renders correctly).
+        # Wait for the chosen_inline_result event (it carries the
+        # ``inline_message_id``) and re-issue the same body via the bot.
+        # One extra RPC, no flicker. Best-effort: non-premium owners and
+        # transient errors get logged but never bubble up.
         if not photo:
             try:
-                await self.bot.edit_message_text(
-                    text=text,
-                    chat_id=m.chat_id,
-                    message_id=m.id,
-                    link_preview_options=LinkPreviewOptions(is_disabled=True),
-                    reply_markup=self._generate_markup(form_uid),
-                )
+                event = self._forms[form_uid].get("_chosen_event")
+                if event is not None:
+                    await asyncio.wait_for(event.wait(), timeout=5.0)
+                inline_message_id = self._forms[form_uid].get("inline_message_id")
+                if inline_message_id:
+                    await self.bot.edit_message_text(
+                        text=text,
+                        inline_message_id=inline_message_id,
+                        link_preview_options=LinkPreviewOptions(is_disabled=True),
+                        reply_markup=self._generate_markup(form_uid),
+                    )
             except Exception:
-                # Re-render is best-effort: the inline send already succeeded,
-                # users see the (un-animated) message either way.
                 logger.debug("inline.form() post-send refresh failed", exc_info=True)
 
         return form_uid
