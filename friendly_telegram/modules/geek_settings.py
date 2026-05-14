@@ -266,7 +266,6 @@ class GeekSettingsMod(loader.Module):
                             "text": "🚫 Cancel",
                             "callback": self.inline__close,
                             "style": "danger",
-                            "icon_custom_emoji_id": "5240241223632954241",
                         },
                     ]
                 ],
@@ -331,7 +330,6 @@ class GeekSettingsMod(loader.Module):
                     "callback": self.inline__restart,
                     "args": (True,),
                     "style": "primary",
-                    "icon_custom_emoji_id": "5264727218734524899",
                 },
                 {
                     "text": "🪂 Update",
@@ -345,7 +343,6 @@ class GeekSettingsMod(loader.Module):
                     "text": "😌 Close menu",
                     "callback": self.inline__close,
                     "style": "danger",
-                    "icon_custom_emoji_id": "5370699111492229743",
                 }
             ],
         ]

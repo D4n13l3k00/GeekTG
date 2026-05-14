@@ -84,13 +84,11 @@ class PythonMod(loader.Module):
                             "text": "✅ Allow",
                             "callback": self.inline__allow,
                             "style": "success",
-                            "icon_custom_emoji_id": "5427009714745517609",
                         },
                         {
                             "text": "🚫 Cancel",
                             "callback": self.inline__close,
                             "style": "danger",
-                            "icon_custom_emoji_id": "5240241223632954241",
                         },
                     ]
                 ],

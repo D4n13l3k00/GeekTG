@@ -111,13 +111,11 @@ class GeekConfigMod(loader.Module):
                         "text": "👈 Back",
                         "callback": self.inline__configure,
                         "args": (mod,),
-                        "icon_custom_emoji_id": "5469735272017043817",
                     },
                     {
                         "text": "🚫 Close",
                         "callback": self.inline__close,
                         "style": "danger",
-                        "icon_custom_emoji_id": "5240241223632954241",
                     },
                 ]
             ],
@@ -153,13 +151,11 @@ class GeekConfigMod(loader.Module):
                         "text": "👈 Back",
                         "callback": self.inline__configure,
                         "args": (mod,),
-                        "icon_custom_emoji_id": "5469735272017043817",
                     },
                     {
                         "text": "🚫 Close",
                         "callback": self.inline__close,
                         "style": "danger",
-                        "icon_custom_emoji_id": "5240241223632954241",
                     },
                 ],
             ],
@@ -188,13 +184,11 @@ class GeekConfigMod(loader.Module):
                     {
                         "text": "👈 Back",
                         "callback": self.inline__global_config,
-                        "icon_custom_emoji_id": "5469735272017043817",
                     },
                     {
                         "text": "🚫 Close",
                         "callback": self.inline__close,
                         "style": "danger",
-                        "icon_custom_emoji_id": "5240241223632954241",
                     },
                 ]
             ],
@@ -220,7 +214,6 @@ class GeekConfigMod(loader.Module):
                 {
                     "text": "🚫 Close",
                     "callback": self.inline__close,
-                    "icon_custom_emoji_id": "5240241223632954241",
                 }
             ]
         ]

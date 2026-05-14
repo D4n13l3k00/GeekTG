@@ -832,30 +832,18 @@ class SysInfoMod(loader.Module):
             _SECTION_NETWORK: self.tr("title_network"),
             _SECTION_PROCESS: self.tr("title_process"),
         }
-        # Custom-emoji ids paired with each section's leading emoji. Telegram
-        # renders these as the button icon for premium users; non-premium
-        # users see the plain emoji we keep in ``label``.
-        icons = {
-            _SECTION_OVERVIEW: "5282843764451195532",  # 🖥
-            _SECTION_CPU: "5431449001532594346",  # ⚡
-            _SECTION_MEMORY: None,  # 💾 — no animated id yet
-            _SECTION_DISK: None,  # 📀 — no animated id yet
-            _SECTION_NETWORK: "5447410659077661506",  # 🌐
-            _SECTION_PROCESS: "5372981976804366741",  # 🤖
-        }
         section_buttons = []
         for key in _SECTIONS:
             label = labels[key]
             if key == current:
                 label = f"• {label} •"
-            btn: Dict[str, Any] = {
-                "text": label,
-                "callback": self._switch_section,
-                "args": (key,),
-            }
-            if icons[key]:
-                btn["icon_custom_emoji_id"] = icons[key]
-            section_buttons.append(btn)
+            section_buttons.append(
+                {
+                    "text": label,
+                    "callback": self._switch_section,
+                    "args": (key,),
+                }
+            )
         rows: List[List[Dict[str, Any]]] = [
             section_buttons[:3],
             section_buttons[3:],
@@ -867,13 +855,11 @@ class SysInfoMod(loader.Module):
                     "callback": self._refresh,
                     "args": (current,),
                     "style": "primary",
-                    "icon_custom_emoji_id": "5264727218734524899",  # 🔄
                 },
                 {
                     "text": self.tr("btn_close"),
                     "callback": self._close,
                     "style": "danger",
-                    "icon_custom_emoji_id": "5240241223632954241",  # 🚫
                 },
             ]
         )

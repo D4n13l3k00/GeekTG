@@ -143,18 +143,23 @@ inline-bot input field):
 
 ### Bot API 9.4 styling
 
-Any button dict above can carry two extra optional keys:
+Buttons can carry one optional styling key:
 
 - `style` — one of `"primary"` (blue), `"success"` (green), `"danger"`
   (red). Anything else is logged and ignored.
-- `icon_custom_emoji_id` — Telegram custom-emoji document id, rendered
-  to the left of the label.
 
 ```python
 {"text": "Delete", "callback": self.do_delete, "style": "danger"}
-{"text": "Confirm", "callback": self.confirm,
- "style": "success", "icon_custom_emoji_id": "5444323130003012112"}
+{"text": "Confirm", "callback": self.confirm, "style": "success"}
 ```
+
+> Telegram also defines an `icon_custom_emoji_id` field for inline
+> buttons, but the Bot API only honours it for premium-bot identities
+> (Fragment-purchased usernames). Our @BotFather-spawned inline bot
+> cannot attach custom emoji to button labels — the manager intentionally
+> drops that key. Use plain emoji in the label instead, and put your
+> animated `<tg-emoji>` markup in **message text** (where Telethon-side
+> sends do honour it).
 
 Both are forwarded as-is to aiogram and validated server-side.
 

@@ -23,17 +23,14 @@ from ..inline.types import InlineCall
 logger = logging.getLogger(__name__)
 
 
-# (label, level, icon_id) triples reused by both the .logs and .setloglevel
-# pickers. ``icon_id`` is a Telegram custom-emoji document id rendered as
-# the button icon for premium users; ``None`` means "no animated icon, the
-# emoji in ``label`` is enough".
+# (label, level) pairs reused by both the .logs and .setloglevel pickers.
 _LOG_LEVELS = [
-    ("🚨 Critical", logging.CRITICAL, "5395695537687123235"),
-    ("🚫 Error", logging.ERROR, "5240241223632954241"),
-    ("⚠️ Warning", logging.WARNING, None),
-    ("ℹ️ Info", logging.INFO, None),
-    ("🧑‍💻 Debug", logging.DEBUG, "5190458330719461749"),
-    ("👁 All", 0, "5424892643760937442"),
+    ("🚨 Critical", logging.CRITICAL),
+    ("🚫 Error", logging.ERROR),
+    ("⚠️ Warning", logging.WARNING),
+    ("ℹ️ Info", logging.INFO),
+    ("🧑‍💻 Debug", logging.DEBUG),
+    ("👁 All", 0),
 ]
 
 
@@ -108,29 +105,29 @@ class TestMod(loader.Module):
 
     def _level_keyboard(self, callback, extra_args: tuple = ()) -> list:
         """Build the 3x2 loglevel keyboard used by .logs and .setloglevel."""
-
-        def cell(item: tuple) -> dict:
-            label, level, icon = item
-            btn = {
-                "text": label,
-                "callback": callback,
-                "args": (*extra_args, level),
-            }
-            if icon:
-                btn["icon_custom_emoji_id"] = icon
-            return btn
-
         rows = []
         pairs = list(_LOG_LEVELS)
         for left, right in zip(pairs[::2], pairs[1::2]):
-            rows.append([cell(left), cell(right)])
+            rows.append(
+                [
+                    {
+                        "text": left[0],
+                        "callback": callback,
+                        "args": (*extra_args, left[1]),
+                    },
+                    {
+                        "text": right[0],
+                        "callback": callback,
+                        "args": (*extra_args, right[1]),
+                    },
+                ]
+            )
         rows.append(
             [
                 {
                     "text": "🚫 Cancel",
                     "callback": self.cancel,
                     "style": "danger",
-                    "icon_custom_emoji_id": "5240241223632954241",
                 }
             ]
         )
@@ -197,13 +194,11 @@ class TestMod(loader.Module):
                         "callback": self.logscmd,
                         "args": [True, lvl],
                         "style": "primary",
-                        "icon_custom_emoji_id": "5433614747381538714",
                     },
                     {
                         "text": "🚫 Cancel",
                         "callback": self.cancel,
                         "style": "danger",
-                        "icon_custom_emoji_id": "5240241223632954241",
                     },
                 ]
             ],

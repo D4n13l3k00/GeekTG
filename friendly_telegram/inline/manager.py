@@ -578,9 +578,11 @@ class InlineManager:
 
         rows: List[List[InlineKeyboardButton]] = []
         # Bot API 9.4 styling — accepted as extra kwargs on every button.
-        # ``style`` ∈ {"primary","success","danger"}; ``icon_custom_emoji_id``
-        # is a custom-emoji document id. Both are forwarded as-is to aiogram
-        # which validates them server-side.
+        # ``style`` ∈ {"primary","success","danger"}, validated server-side.
+        # ``icon_custom_emoji_id`` is intentionally NOT supported here:
+        # only Telegram-issued premium bots may attach custom emoji to a
+        # button label, and our @BotFather-spawned inline bot can't, so we
+        # don't even try.
         _STYLE_VALUES = {"primary", "success", "danger"}
 
         def _extras(btn: dict) -> dict:
@@ -595,9 +597,6 @@ class InlineManager:
                     )
                 else:
                     out["style"] = style
-            icon = btn.get("icon_custom_emoji_id")
-            if icon is not None:
-                out["icon_custom_emoji_id"] = str(icon)
             return out
 
         for row in buttons:

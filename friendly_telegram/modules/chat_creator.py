@@ -140,7 +140,6 @@ class ChatCreatorMod(loader.Module):
             "text": self.tr("btn_close"),
             "callback": self._close,
             "style": "danger",
-            "icon_custom_emoji_id": "5240241223632954241",
         }
 
     def _pick_markup(self) -> list:
@@ -155,7 +154,6 @@ class ChatCreatorMod(loader.Module):
                     "text": self.tr("btn_group"),
                     "callback": self._stage_two,
                     "args": ("group",),
-                    "icon_custom_emoji_id": "5372926953978341366",
                 },
             ],
             [
@@ -163,7 +161,6 @@ class ChatCreatorMod(loader.Module):
                     "text": self.tr("btn_super"),
                     "callback": self._stage_two,
                     "args": ("supergroup",),
-                    "icon_custom_emoji_id": "5447410659077661506",
                 },
             ],
             [self._close_button()],
@@ -188,7 +185,6 @@ class ChatCreatorMod(loader.Module):
                         "callback": self._do_create_cb,
                         "args": (chat_type, default_title),
                         "style": "success",
-                        "icon_custom_emoji_id": "5427009714745517609",
                     },
                 ],
                 [

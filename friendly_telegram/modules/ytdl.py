@@ -414,7 +414,6 @@ class YtDlMod(loader.Module):
                         "text": f"🎬 Video ({len(videos)} options)",
                         "callback": self._inline_show_video,
                         "args": (token, reply_id),
-                        "icon_custom_emoji_id": "5375464961822695044",
                     }
                 ]
             )
@@ -426,7 +425,6 @@ class YtDlMod(loader.Module):
                     "text": f"🎵 Audio ({n} options)",
                     "callback": self._inline_show_audio,
                     "args": (token, reply_id),
-                    "icon_custom_emoji_id": "5188621441926438751",
                 }
             ]
         )
@@ -436,7 +434,6 @@ class YtDlMod(loader.Module):
                     "text": "✖ Cancel",
                     "callback": self._inline_cancel,
                     "style": "danger",
-                    "icon_custom_emoji_id": "5226660202035554522",
                 }
             ]
         )
@@ -450,7 +447,6 @@ class YtDlMod(loader.Module):
                 "text": f"🎬 {_video_label(f)}",
                 "callback": self._inline_pick,
                 "args": (token, "video", f["format_id"], reply_id),
-                "icon_custom_emoji_id": "5375464961822695044",
             }
             for f in videos
         ]
@@ -465,7 +461,6 @@ class YtDlMod(loader.Module):
                 {
                     "text": "✖ Cancel",
                     "callback": self._inline_cancel,
-                    "icon_custom_emoji_id": "5226660202035554522",
                 },
             ]
         )
@@ -480,7 +475,6 @@ class YtDlMod(loader.Module):
                     "text": f"🎵 {_audio_label(f)}",
                     "callback": self._inline_pick,
                     "args": (token, "audio", f["format_id"], reply_id),
-                    "icon_custom_emoji_id": "5188621441926438751",
                 }
                 for f in audios
             ]
@@ -492,7 +486,6 @@ class YtDlMod(loader.Module):
                     "text": f"🎵 {label}",
                     "callback": self._inline_pick,
                     "args": (token, "audio_preset", quality, reply_id),
-                    "icon_custom_emoji_id": "5188621441926438751",
                 }
                 for label, quality in _AUDIO_PRESETS
             ]
@@ -507,7 +500,6 @@ class YtDlMod(loader.Module):
                 {
                     "text": "✖ Cancel",
                     "callback": self._inline_cancel,
-                    "icon_custom_emoji_id": "5226660202035554522",
                 },
             ]
         )

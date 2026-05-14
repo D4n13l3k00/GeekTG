@@ -138,7 +138,6 @@ class GeekSecurityMod(loader.Module):
                     "text": self.tr("close_menu"),
                     "callback": self.inline_close,
                     "style": "danger",
-                    "icon_custom_emoji_id": "5467370583282950466",
                 }
             ]
         ]
@@ -296,14 +295,12 @@ class GeekSecurityMod(loader.Module):
                             "text": self.tr("cancel"),
                             "callback": self.inline_close,
                             "style": "danger",
-                            "icon_custom_emoji_id": "5240241223632954241",
                         },
                         {
                             "text": self.tr("confirm"),
                             "callback": self._add_to_group,
                             "args": (group, True, entity.id),
                             "style": "success",
-                            "icon_custom_emoji_id": "5467406098367521267",
                         },
                     ]
                 ],
