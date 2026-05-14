@@ -14,6 +14,7 @@ Inline
 # scope: inline
 
 import logging
+from typing import Optional
 
 from telethon.tl.custom import Message
 from telethon.tl.functions.channels import CreateChannelRequest
@@ -228,7 +229,7 @@ class ChatCreatorMod(loader.Module):
         call,
         chat_type: str,
         title: str,
-        inline_message_id: str = None,
+        inline_message_id: Optional[str] = None,
     ) -> None:
         """Run creation from inline; edit the form with the result."""
         edit_kwargs = (

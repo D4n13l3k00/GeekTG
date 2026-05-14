@@ -134,7 +134,7 @@ class CoreMod(loader.Module):
         self.ctx.db.set(
             main.__name__,
             "blacklist_chats",
-            self.ctx.db.get(main.__name__, "blacklist_chats", []) + [chatid],
+            (self.ctx.db.get(main.__name__, "blacklist_chats", []) or []) + [chatid],
         )
 
         await utils.answer(message, self.tr("blacklisted", message).format(chatid))
@@ -147,7 +147,10 @@ class CoreMod(loader.Module):
         self.ctx.db.set(
             main.__name__,
             "blacklist_chats",
-            list(set(self.ctx.db.get(main.__name__, "blacklist_chats", [])) - {chatid}),
+            list(
+                set(self.ctx.db.get(main.__name__, "blacklist_chats", []) or [])
+                - {chatid}
+            ),
         )
 
         await utils.answer(message, self.tr("unblacklisted", message).format(chatid))
@@ -175,7 +178,7 @@ class CoreMod(loader.Module):
         self.ctx.db.set(
             main.__name__,
             "blacklist_users",
-            self.ctx.db.get(main.__name__, "blacklist_users", []) + [user],
+            (self.ctx.db.get(main.__name__, "blacklist_users", []) or []) + [user],
         )
 
         await utils.answer(message, self.tr("user_blacklisted", message).format(user))
@@ -188,7 +191,10 @@ class CoreMod(loader.Module):
         self.ctx.db.set(
             main.__name__,
             "blacklist_users",
-            list(set(self.ctx.db.get(main.__name__, "blacklist_users", [])) - {user}),
+            list(
+                set(self.ctx.db.get(main.__name__, "blacklist_users", []) or [])
+                - {user}
+            ),
         )
 
         await utils.answer(message, self.tr("user_unblacklisted", message).format(user))

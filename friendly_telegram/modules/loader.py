@@ -188,9 +188,9 @@ class LoaderMod(loader.Module):
                     __name__,
                     "loaded_modules",
                     list(
-                        set(self.ctx.db.get(__name__, "loaded_modules", [])).union(
-                            [args]
-                        )
+                        set(
+                            self.ctx.db.get(__name__, "loaded_modules", []) or []
+                        ).union([args])
                     ),
                 )
         else:
@@ -234,8 +234,8 @@ class LoaderMod(loader.Module):
         todo = await self.get_repo_list(
             self.ctx.db.get(__name__, "chosen_preset", "none")
         )
-        todo = todo.difference(self.ctx.db.get(__name__, "unloaded_modules", []))
-        todo.update(self.ctx.db.get(__name__, "loaded_modules", []))
+        todo = todo.difference(self.ctx.db.get(__name__, "unloaded_modules", []) or [])
+        todo.update(self.ctx.db.get(__name__, "loaded_modules", []) or [])
         return todo
 
     async def get_repo_list(self, preset=None):
@@ -561,9 +561,9 @@ class LoaderMod(loader.Module):
                     __name__,
                     "loaded_repositories",
                     list(
-                        set(self.ctx.db.get(__name__, "loaded_repositories", [])).union(
-                            [repo_url]
-                        )
+                        set(
+                            self.ctx.db.get(__name__, "loaded_repositories", []) or []
+                        ).union([repo_url])
                     ),
                 )
 
@@ -580,7 +580,7 @@ class LoaderMod(loader.Module):
 
         if len(args) == 1:
             repoUrl = args[0]
-            repos = set(self.ctx.db.get(__name__, "loaded_repositories", []))
+            repos = set(self.ctx.db.get(__name__, "loaded_repositories", []) or [])
 
             try:
                 repos.remove(repoUrl)
@@ -653,7 +653,7 @@ class LoaderMod(loader.Module):
                 __name__,
                 "loaded_modules",
                 list(
-                    set(self.ctx.db.get(__name__, "loaded_modules", []))
+                    set(self.ctx.db.get(__name__, "loaded_modules", []) or [])
                     - set(loaded_to_unloaded)
                 ),
             )
@@ -661,7 +661,7 @@ class LoaderMod(loader.Module):
                 __name__,
                 "unloaded_modules",
                 list(
-                    set(self.ctx.db.get(__name__, "unloaded_modules", []))
+                    set(self.ctx.db.get(__name__, "unloaded_modules", []) or [])
                     | set(loaded_to_unloaded)
                 ),
             )
@@ -670,7 +670,7 @@ class LoaderMod(loader.Module):
                 __name__,
                 "unloaded_modules",
                 list(
-                    set(self.ctx.db.get(__name__, "unloaded_modules", []))
+                    set(self.ctx.db.get(__name__, "unloaded_modules", []) or [])
                     - set(unloaded_to_loaded)
                 ),
             )
@@ -678,7 +678,7 @@ class LoaderMod(loader.Module):
                 __name__,
                 "loaded_modules",
                 list(
-                    set(self.ctx.db.get(__name__, "loaded_modules", []))
+                    set(self.ctx.db.get(__name__, "loaded_modules", []) or [])
                     | set(unloaded_to_loaded)
                 ),
             )
@@ -700,7 +700,7 @@ class LoaderMod(loader.Module):
 
         await asyncio.gather(*[self.download_and_install(mod) for mod in todo])
 
-        repos = set(self.ctx.db.get(__name__, "loaded_repositories", []))
+        repos = set(self.ctx.db.get(__name__, "loaded_repositories", []) or [])
 
         await asyncio.gather(*[self.load_repo(get_git_api(url)) for url in repos])
 

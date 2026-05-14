@@ -99,7 +99,8 @@ class GeekSecurityMod(loader.Module):
 
     def _current_cmd_mask(self, cmd: FunctionType) -> int:
         client: Any = self.ctx.client
-        return self.ctx.db.get(security.__name__, "masks", {}).get(
+        masks = self.ctx.db.get(security.__name__, "masks", {}) or {}
+        return masks.get(
             self._cmd_key(cmd),
             getattr(
                 cmd,
@@ -109,7 +110,8 @@ class GeekSecurityMod(loader.Module):
         )
 
     def _current_global_mask(self) -> int:
-        return self.ctx.db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
+        value = self.ctx.db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
+        return value if value is not None else DEFAULT_PERMISSIONS
 
     def _perm_buttons(self, mask: int, callback, prefix_args: tuple) -> list:
         """Build the permission toggle keyboard for either single-cmd or global."""
@@ -151,7 +153,7 @@ class GeekSecurityMod(loader.Module):
     ) -> None:
         cmd = self.allmodules.commands[command]
         bit = security.BITMAP[group.upper()]
-        masks = self.ctx.db.get(security.__name__, "masks", {})
+        masks = self.ctx.db.get(security.__name__, "masks", {}) or {}
         masks[self._cmd_key(cmd)] = _flip(self._current_cmd_mask(cmd), bit, level)
         self.ctx.db.set(security.__name__, "masks", masks)
 
@@ -242,11 +244,11 @@ class GeekSecurityMod(loader.Module):
         return user
 
     def _group_add(self, group: str, user_id: int) -> None:
-        ids = set(self.ctx.db.get(security.__name__, group, [])) | {user_id}
+        ids = set(self.ctx.db.get(security.__name__, group, []) or []) | {user_id}
         self.ctx.db.set(security.__name__, group, list(ids))
 
     def _group_remove(self, group: str, user_id: int) -> None:
-        ids = set(self.ctx.db.get(security.__name__, group, [])) - {user_id}
+        ids = set(self.ctx.db.get(security.__name__, group, []) or []) - {user_id}
         self.ctx.db.set(security.__name__, group, list(ids))
 
     async def _add_to_group(
@@ -319,7 +321,7 @@ class GeekSecurityMod(loader.Module):
         )
 
     async def _list_group(self, message: Message, group: str) -> None:
-        ids = self.ctx.db.get(security.__name__, group, [])
+        ids = self.ctx.db.get(security.__name__, group, []) or []
         if group == "owner":
             ids = ids + [self._me]
 

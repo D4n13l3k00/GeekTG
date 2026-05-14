@@ -82,7 +82,7 @@ class HelpMod(loader.Module):
     # ---------------------------------------------------------------- helpers
 
     def _hidden(self) -> list:
-        return self.ctx.db.get(self.strings["name"], "hide", [])
+        return self.ctx.db.get(self.strings["name"], "hide", []) or []
 
     def _set_hidden(self, value) -> None:
         self.ctx.db.set(self.strings["name"], "hide", value)
