@@ -1174,21 +1174,27 @@ class InlineManager:
         # ``inline_message_id``) and re-issue the same body via the bot.
         # One extra RPC, no flicker. Best-effort: non-premium owners and
         # transient errors get logged but never bubble up.
-        if not photo:
-            try:
-                event = self._forms[form_uid].get("_chosen_event")
-                if event is not None:
-                    await asyncio.wait_for(event.wait(), timeout=5.0)
-                inline_message_id = self._forms[form_uid].get("inline_message_id")
-                if inline_message_id:
+        try:
+            event = self._forms[form_uid].get("_chosen_event")
+            if event is not None:
+                await asyncio.wait_for(event.wait(), timeout=5.0)
+            inline_message_id = self._forms[form_uid].get("inline_message_id")
+            if inline_message_id:
+                if photo:
+                    await self.bot.edit_message_caption(
+                        caption=text,
+                        inline_message_id=inline_message_id,
+                        reply_markup=self._generate_markup(form_uid),
+                    )
+                else:
                     await self.bot.edit_message_text(
                         text=text,
                         inline_message_id=inline_message_id,
                         link_preview_options=LinkPreviewOptions(is_disabled=True),
                         reply_markup=self._generate_markup(form_uid),
                     )
-            except Exception:
-                logger.debug("inline.form() post-send refresh failed", exc_info=True)
+        except Exception:
+            logger.debug("inline.form() post-send refresh failed", exc_info=True)
 
         return form_uid
 
