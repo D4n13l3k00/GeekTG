@@ -263,9 +263,10 @@ class GeekSettingsMod(loader.Module):
                             "style": "success",
                         },
                         {
-                            "text": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Cancel",
+                            "text": "🚫 Cancel",
                             "callback": self.inline__close,
                             "style": "danger",
+                            "icon_custom_emoji_id": "5240241223632954241",
                         },
                     ]
                 ],
@@ -326,10 +327,11 @@ class GeekSettingsMod(loader.Module):
             ],
             [
                 {
-                    "text": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> Restart",
+                    "text": "🔄 Restart",
                     "callback": self.inline__restart,
                     "args": (True,),
                     "style": "primary",
+                    "icon_custom_emoji_id": "5264727218734524899",
                 },
                 {
                     "text": "🪂 Update",
@@ -340,9 +342,10 @@ class GeekSettingsMod(loader.Module):
             ],
             [
                 {
-                    "text": "<tg-emoji emoji-id='5370699111492229743'>😌</tg-emoji> Close menu",
+                    "text": "😌 Close menu",
                     "callback": self.inline__close,
                     "style": "danger",
+                    "icon_custom_emoji_id": "5370699111492229743",
                 }
             ],
         ]

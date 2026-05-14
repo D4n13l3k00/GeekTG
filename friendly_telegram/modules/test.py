@@ -128,9 +128,10 @@ class TestMod(loader.Module):
         rows.append(
             [
                 {
-                    "text": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Cancel",
+                    "text": "🚫 Cancel",
                     "callback": self.cancel,
                     "style": "danger",
+                    "icon_custom_emoji_id": "5240241223632954241",
                 }
             ]
         )
@@ -193,15 +194,17 @@ class TestMod(loader.Module):
             "reply_markup": [
                 [
                     {
-                        "text": "<tg-emoji emoji-id='5433614747381538714'>📤</tg-emoji> Send anyway",
+                        "text": "📤 Send anyway",
                         "callback": self.logscmd,
                         "args": [True, lvl],
                         "style": "primary",
+                        "icon_custom_emoji_id": "5433614747381538714",
                     },
                     {
-                        "text": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Cancel",
+                        "text": "🚫 Cancel",
                         "callback": self.cancel,
                         "style": "danger",
+                        "icon_custom_emoji_id": "5240241223632954241",
                     },
                 ]
             ],

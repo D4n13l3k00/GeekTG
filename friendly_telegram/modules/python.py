@@ -81,14 +81,16 @@ class PythonMod(loader.Module):
                 reply_markup=[
                     [
                         {
-                            "text": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> Allow",
+                            "text": "✅ Allow",
                             "callback": self.inline__allow,
                             "style": "success",
+                            "icon_custom_emoji_id": "5427009714745517609",
                         },
                         {
-                            "text": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Cancel",
+                            "text": "🚫 Cancel",
                             "callback": self.inline__close,
                             "style": "danger",
+                            "icon_custom_emoji_id": "5240241223632954241",
                         },
                     ]
                 ],
