@@ -822,6 +822,17 @@ class InlineManager:
         # Use the form_uid as the result id so ``_chosen_inline_handler``
         # can map the chosen result back to its form and capture the
         # ``inline_message_id`` we need for the post-send refresh edit.
+        #
+        # The body itself is sent as a tiny placeholder. The real text is
+        # pushed via ``bot.edit_message_text`` right after the user picks
+        # this result. That detour exists because the Telegram client
+        # caches ``SendInlineBotResultRequest`` output and won't re-render
+        # the message on an "identical" edit — even when the edit would
+        # otherwise materialise the custom-emoji entities. Sending a
+        # different placeholder first guarantees the follow-up edit isn't
+        # rejected as ``MESSAGE_NOT_MODIFIED`` and the client always
+        # repaints with animations.
+        placeholder = "⏳"
         await inline_query.answer(
             (
                 [
@@ -829,7 +840,7 @@ class InlineManager:
                         id=query,
                         title="GeekTG",
                         photo_url=form_state["photo"],
-                        caption=form_state["text"],
+                        caption=placeholder,
                         reply_markup=self._generate_markup(query),
                         thumbnail_url=form_state["photo"],
                     )
@@ -840,7 +851,7 @@ class InlineManager:
                         id=query,
                         title="GeekTG",
                         input_message_content=InputTextMessageContent(
-                            message_text=form_state["text"],
+                            message_text=placeholder,
                             link_preview_options=LinkPreviewOptions(is_disabled=True),
                         ),
                         reply_markup=self._generate_markup(query),
