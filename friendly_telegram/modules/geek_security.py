@@ -39,7 +39,7 @@ class GeekSecurityMod(loader.Module):
         "name": "GeekSecurity",
         "no_command": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Command </b><code>{}</code><b> not found!</b>",
         "permissions": "<tg-emoji emoji-id='5472308992514464048'>🔐</tg-emoji> <b>Here you can configure permissions for </b><code>{}{}</code>",
-        "close_menu": "<tg-emoji emoji-id='5467370583282950466'>🙈</tg-emoji> Close this menu",
+        "close_menu": "🙈 Close this menu",
         "global": "<tg-emoji emoji-id='5472308992514464048'>🔐</tg-emoji> <b>Here you can configure global bounding mask. If the permission is excluded here, it is excluded everywhere!</b>",
         "owner": "<tg-emoji emoji-id='5217822164362739968'>🤴</tg-emoji> Owner",
         "sudo": "🤵 Sudo",
@@ -75,8 +75,8 @@ class GeekSecurityMod(loader.Module):
             "This action may reveal personal info and grant "
             "full or partial access to userbot to this user</b>"
         ),
-        "cancel": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Cancel",
-        "confirm": "<tg-emoji emoji-id='5467406098367521267'>👑</tg-emoji> Confirm",
+        "cancel": "🚫 Cancel",
+        "confirm": "👑 Confirm",
         "self": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>You can't promote/demote yourself!</b>",
     }
 
@@ -138,6 +138,7 @@ class GeekSecurityMod(loader.Module):
                     "text": self.tr("close_menu"),
                     "callback": self.inline_close,
                     "style": "danger",
+                    "icon_custom_emoji_id": "5467370583282950466",
                 }
             ]
         ]
@@ -295,12 +296,14 @@ class GeekSecurityMod(loader.Module):
                             "text": self.tr("cancel"),
                             "callback": self.inline_close,
                             "style": "danger",
+                            "icon_custom_emoji_id": "5240241223632954241",
                         },
                         {
                             "text": self.tr("confirm"),
                             "callback": self._add_to_group,
                             "args": (group, True, entity.id),
                             "style": "success",
+                            "icon_custom_emoji_id": "5467406098367521267",
                         },
                     ]
                 ],

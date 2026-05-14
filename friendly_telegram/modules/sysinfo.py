@@ -777,16 +777,16 @@ class SysInfoMod(loader.Module):
         "psutil_missing": (
             "\n\n⚠️ <i>psutil not installed — using /proc fallbacks.</i>"
         ),
-        "title_overview": "<tg-emoji emoji-id='5282843764451195532'>🖥</tg-emoji> Overview",
-        "title_cpu": "<tg-emoji emoji-id='5431449001532594346'>⚡</tg-emoji> CPU",
+        "title_overview": "🖥 Overview",
+        "title_cpu": "⚡ CPU",
         "title_memory": "💾 RAM",
         "title_disk": "📀 Disk",
-        "title_network": "<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> Network",
-        "title_process": "<tg-emoji emoji-id='5372981976804366741'>🤖</tg-emoji> Process",
-        "btn_refresh": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> Refresh",
-        "btn_close": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Close",
-        "answer_refreshed": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> Refreshed",
-        "answer_closed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Closed",
+        "title_network": "🌐 Network",
+        "title_process": "🤖 Process",
+        "btn_refresh": "🔄 Refresh",
+        "btn_close": "🚫 Close",
+        "answer_refreshed": "🔄 Refreshed",
+        "answer_closed": "🚫 Closed",
         "_disk_path_doc": (
             "Mount point inspected for disk stats. Empty = userbot data dir."
         ),
@@ -832,18 +832,30 @@ class SysInfoMod(loader.Module):
             _SECTION_NETWORK: self.tr("title_network"),
             _SECTION_PROCESS: self.tr("title_process"),
         }
+        # Custom-emoji ids paired with each section's leading emoji. Telegram
+        # renders these as the button icon for premium users; non-premium
+        # users see the plain emoji we keep in ``label``.
+        icons = {
+            _SECTION_OVERVIEW: "5282843764451195532",  # 🖥
+            _SECTION_CPU: "5431449001532594346",  # ⚡
+            _SECTION_MEMORY: None,  # 💾 — no animated id yet
+            _SECTION_DISK: None,  # 📀 — no animated id yet
+            _SECTION_NETWORK: "5447410659077661506",  # 🌐
+            _SECTION_PROCESS: "5372981976804366741",  # 🤖
+        }
         section_buttons = []
         for key in _SECTIONS:
             label = labels[key]
             if key == current:
                 label = f"• {label} •"
-            section_buttons.append(
-                {
-                    "text": label,
-                    "callback": self._switch_section,
-                    "args": (key,),
-                }
-            )
+            btn: Dict[str, Any] = {
+                "text": label,
+                "callback": self._switch_section,
+                "args": (key,),
+            }
+            if icons[key]:
+                btn["icon_custom_emoji_id"] = icons[key]
+            section_buttons.append(btn)
         rows: List[List[Dict[str, Any]]] = [
             section_buttons[:3],
             section_buttons[3:],
@@ -855,11 +867,13 @@ class SysInfoMod(loader.Module):
                     "callback": self._refresh,
                     "args": (current,),
                     "style": "primary",
+                    "icon_custom_emoji_id": "5264727218734524899",  # 🔄
                 },
                 {
                     "text": self.tr("btn_close"),
                     "callback": self._close,
                     "style": "danger",
+                    "icon_custom_emoji_id": "5240241223632954241",  # 🚫
                 },
             ]
         )

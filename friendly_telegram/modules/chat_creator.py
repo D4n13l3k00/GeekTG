@@ -91,12 +91,12 @@ class ChatCreatorMod(loader.Module):
         # Shown in the inline-switch placeholder (no HTML rendering there).
         "inline_title_placeholder": "Send a title for the new {type}",
         "btn_channel": "📢 Channel",
-        "btn_group": "<tg-emoji emoji-id='5372926953978341366'>👥</tg-emoji> Group",
-        "btn_super": "<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> Supergroup",
-        "btn_default": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> Use default title",
+        "btn_group": "👥 Group",
+        "btn_super": "🌐 Supergroup",
+        "btn_default": "✅ Use default title",
         "btn_custom": "✏️ Enter title",
         "btn_back": "⬅️ Back",
-        "btn_close": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Close",
+        "btn_close": "🚫 Close",
         "cancelled": "<tg-emoji emoji-id='5226660202035554522'>✖️</tg-emoji> <b>Cancelled.</b>",
         "closed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Closed.</b>",
     }
@@ -140,6 +140,7 @@ class ChatCreatorMod(loader.Module):
             "text": self.tr("btn_close"),
             "callback": self._close,
             "style": "danger",
+            "icon_custom_emoji_id": "5240241223632954241",
         }
 
     def _pick_markup(self) -> list:
@@ -154,6 +155,7 @@ class ChatCreatorMod(loader.Module):
                     "text": self.tr("btn_group"),
                     "callback": self._stage_two,
                     "args": ("group",),
+                    "icon_custom_emoji_id": "5372926953978341366",
                 },
             ],
             [
@@ -161,6 +163,7 @@ class ChatCreatorMod(loader.Module):
                     "text": self.tr("btn_super"),
                     "callback": self._stage_two,
                     "args": ("supergroup",),
+                    "icon_custom_emoji_id": "5447410659077661506",
                 },
             ],
             [self._close_button()],
@@ -185,6 +188,7 @@ class ChatCreatorMod(loader.Module):
                         "callback": self._do_create_cb,
                         "args": (chat_type, default_title),
                         "style": "success",
+                        "icon_custom_emoji_id": "5427009714745517609",
                     },
                 ],
                 [
