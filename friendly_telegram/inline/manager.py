@@ -22,7 +22,7 @@ import re
 import time
 from importlib.resources import files  # noqa: F401
 from types import FunctionType  # noqa: F401
-from typing import Any, List, Optional, Union  # noqa: F401
+from typing import Any, List, Optional, Union, cast  # noqa: F401
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -164,7 +164,7 @@ class InlineManager:
 
         return allow
 
-    async def _create_bot(self) -> None:
+    async def _create_bot(self) -> bool:
         # This is called outside of conversation, so we can start the new one
         # We create new bot
         logger.info("User don't have bot, attempting creating new one")
@@ -237,7 +237,7 @@ class InlineManager:
 
     async def _assert_token(
         self, create_new_if_needed=True, revoke_token=False
-    ) -> None:
+    ) -> bool:
         # If the token is set in db
         if self._token:
             # Just return `True`
@@ -252,7 +252,7 @@ class InlineManager:
                 m = await conv.send_message("/token")
             except YouBlockedUserError:
                 # If user banned BotFather, unban him
-                await self._client(UnblockRequest(id="@BotFather"))
+                await self._client(UnblockRequest(id="@BotFather"))  # type: ignore[arg-type]
                 # And resend message
                 m = await conv.send_message("/token")
 
@@ -413,7 +413,7 @@ class InlineManager:
 
     async def _register_manager(
         self, after_break=False, ignore_token_checks=False
-    ) -> None:
+    ) -> Optional[bool]:
         # Get info about user to use it in this class
         me = await self._client.get_me()
         self._me = me.id
@@ -432,7 +432,7 @@ class InlineManager:
 
         # Create bot instance and dispatcher
         self.bot = Bot(
-            token=self._token,
+            token=str(self._token or ""),
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         )
         self._bot = self.bot  # This is a temporary alias so the
@@ -554,7 +554,7 @@ class InlineManager:
         self._cleaner_task.cancel()
 
     def _generate_markup(
-        self, form_uid: Union[str, list], buttons: list = False
+        self, form_uid: Union[str, list], buttons: Optional[list] = None
     ) -> InlineKeyboardMarkup:
         """Generate markup for form"""
         if form_uid:
@@ -685,7 +685,7 @@ class InlineManager:
                         "\n".join(
                             [
                                 line.strip()
-                                for line in inspect.getdoc(fun).splitlines()
+                                for line in (inspect.getdoc(fun) or "").splitlines()
                                 if not line.strip().startswith("@")
                             ]
                         )
@@ -805,8 +805,8 @@ class InlineManager:
                             title="Toss a coin",
                             photo_url=gallery["photo_url"],
                             thumbnail_url=gallery["photo_url"],
-                            caption=caption,
-                            description=caption,
+                            caption=str(caption) if caption else None,
+                            description=str(caption) if caption else None,
                             reply_markup=markup,
                         )
                     ],
@@ -1025,7 +1025,7 @@ class InlineManager:
             if isinstance(reply_markup, dict):
                 reply_markup = [[reply_markup]]
             if isinstance(reply_markup[0], dict):
-                reply_markup = [[_] for _ in reply_markup]
+                reply_markup = cast(List[List[dict]], [[_] for _ in reply_markup])
 
         if reply_markup is None:
             reply_markup = []
@@ -1136,6 +1136,28 @@ class InlineManager:
         if isinstance(message, Message):
             await message.delete()
 
+        # First-render workaround for animated custom emoji.
+        # ``SendInlineBotResultRequest`` builds the message from the bot's
+        # ``InputTextMessageContent`` and silently drops MessageEntityCustomEmoji
+        # along the way — even though the bot owner has Premium and Bot API
+        # 9.4 would otherwise allow them. ``editMessageText`` honours them
+        # (see callbacks via ``call.edit``), so we re-issue the same body
+        # via the bot right after the inline send. One extra RPC, no
+        # visual flicker.
+        if not photo:
+            try:
+                await self.bot.edit_message_text(
+                    text=text,
+                    chat_id=m.chat_id,
+                    message_id=m.id,
+                    link_preview_options=LinkPreviewOptions(is_disabled=True),
+                    reply_markup=self._generate_markup(form_uid),
+                )
+            except Exception:
+                # Re-render is best-effort: the inline send already succeeded,
+                # users see the (un-animated) message either way.
+                logger.debug("inline.form() post-send refresh failed", exc_info=True)
+
         return form_uid
 
     async def gallery(
@@ -1144,8 +1166,8 @@ class InlineManager:
         message: Union[Message, int],
         next_handler: FunctionType,
         force_me: bool = False,
-        always_allow: bool = False,
-        ttl: int = False,
+        always_allow: Union[bool, list] = False,
+        ttl: Union[int, bool] = False,
     ) -> Union[bool, str]:  # sourcery skip: raise-specific-error
         """
         Processes inline gallery
@@ -1191,8 +1213,9 @@ class InlineManager:
             logger.error("Invalid type for `always_allow`")
             return False
 
-        if not always_allow:
-            always_allow = []
+        always_allow_list: list = (
+            list(always_allow) if isinstance(always_allow, list) else []
+        )
 
         if not isinstance(ttl, int) and ttl:
             logger.error("Invalid type for `ttl`")
@@ -1220,7 +1243,7 @@ class InlineManager:
             "caption": caption,
             "ttl": round(time.time()) + ttl or self._markup_ttl,
             "force_me": force_me,
-            "always_allow": always_allow,
+            "always_allow": always_allow_list,
             "chat": None,
             "message_id": None,
             "uid": gallery_uid,
@@ -1230,16 +1253,14 @@ class InlineManager:
         }
 
         self._custom_map[btn_call_data] = {
-            "handler": asyncio.coroutine(
-                functools.partial(
-                    custom_next_handler,
-                    func=next_handler,
-                    self=self,
-                    btn_call_data=btn_call_data,
-                    caption=caption,
-                )
+            "handler": functools.partial(
+                custom_next_handler,
+                func=next_handler,
+                self=self,
+                btn_call_data=btn_call_data,
+                caption=cast(str, caption),
             ),
-            "always_allow": always_allow,
+            "always_allow": always_allow_list,
             "force_me": force_me,
         }
 
