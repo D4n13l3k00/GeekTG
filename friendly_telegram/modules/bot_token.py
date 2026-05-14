@@ -45,23 +45,23 @@ class BotTokenMod(loader.Module):
 
     strings = {
         "name": "BotToken",
-        "current": "🤖 <b>Inline bot:</b> @{username}\n<code>{redacted}</code>",
-        "no_token": "🤖 <b>No inline bot is configured yet.</b>",
+        "current": "<tg-emoji emoji-id='5372981976804366741'>🤖</tg-emoji> <b>Inline bot:</b> @{username}\n<code>{redacted}</code>",
+        "no_token": "<tg-emoji emoji-id='5372981976804366741'>🤖</tg-emoji> <b>No inline bot is configured yet.</b>",
         "no_arg": (
-            "🚫 <b>Provide a token from @BotFather.</b>\n"
+            "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Provide a token from @BotFather.</b>\n"
             "Example: <code>.setbottoken 123456:ABC-DEF…</code>"
         ),
-        "bad_format": "🚫 <b>That does not look like a bot token.</b>",
-        "bad_token": "🚫 <b>Telegram rejected the token:</b> <code>{err}</code>",
+        "bad_format": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>That does not look like a bot token.</b>",
+        "bad_token": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Telegram rejected the token:</b> <code>{err}</code>",
         "saved": (
-            "✅ <b>Token saved.</b> Inline bot: @{username}.\n"
+            "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Token saved.</b> Inline bot: @{username}.\n"
             "🔁 Run <code>.restart</code> to switch over immediately."
         ),
         "reset": (
-            "🗑 <b>Token cleared.</b> A fresh bot will be created via "
+            "<tg-emoji emoji-id='5445267414562389170'>🗑</tg-emoji> <b>Token cleared.</b> A fresh bot will be created via "
             "@BotFather on the next restart."
         ),
-        "no_inline": "🚫 <b>InlineManager is unavailable (started with --no-inline?).</b>",
+        "no_inline": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>InlineManager is unavailable (started with --no-inline?).</b>",
     }
 
     @loader.owner

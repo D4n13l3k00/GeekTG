@@ -25,12 +25,15 @@ logger = logging.getLogger(__name__)
 
 # (label, level) pairs reused by both the .logs and .setloglevel pickers.
 _LOG_LEVELS = [
-    ("🚨 Critical", logging.CRITICAL),
-    ("🚫 Error", logging.ERROR),
+    (
+        "<tg-emoji emoji-id='5395695537687123235'>🚨</tg-emoji> Critical",
+        logging.CRITICAL,
+    ),
+    ("<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Error", logging.ERROR),
     ("⚠️ Warning", logging.WARNING),
     ("ℹ️ Info", logging.INFO),
-    ("🧑‍💻 Debug", logging.DEBUG),
-    ("👁 All", 0),
+    ("<tg-emoji emoji-id='5190458330719461749'>🧑‍💻</tg-emoji> Debug", logging.DEBUG),
+    ("<tg-emoji emoji-id='5424892643760937442'>👁</tg-emoji> All", 0),
 ]
 
 
@@ -55,12 +58,12 @@ class TestMod(loader.Module):
 
     strings = {
         "name": "Tester",
-        "set_loglevel": "🚫 <b>Please specify verbosity as an integer or string</b>",
+        "set_loglevel": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Please specify verbosity as an integer or string</b>",
         "no_logs": "ℹ️ <b>You don't have any logs at verbosity {}.</b>",
         "logs_filename": "geektg-logs.txt",
         "logs_caption": "🗞 GeekTG logs with verbosity {}",
-        "suspend_invalid_time": "🚫 <b>Invalid time to suspend</b>",
-        "suspended": "🥶 <b>Bot suspended for</b> <code>{}</code> <b>seconds</b>",
+        "suspend_invalid_time": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Invalid time to suspend</b>",
+        "suspended": "<tg-emoji emoji-id='5372892693024218813'>🥶</tg-emoji> <b>Bot suspended for</b> <code>{}</code> <b>seconds</b>",
         "results_ping": "⏱ <b>Ping:</b> <code>{}</code> <b>ms</b>",
         "confidential": (
             "⚠️ <b>Log level </b><code>{}</code><b> "
@@ -75,11 +78,11 @@ class TestMod(loader.Module):
         ),
         "choose_loglevel": "💁‍♂️ <b>Choose log level</b>",
         "loglevel_set": (
-            "✅ <b>Stdout log level set to </b><code>{}</code><b>. "
+            "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Stdout log level set to </b><code>{}</code><b>. "
             "Saved — survives restart.</b>"
         ),
         "loglevel_invalid": (
-            "🚫 <b>Unknown level. Use a name (DEBUG/INFO/WARNING/ERROR/CRITICAL) "
+            "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Unknown level. Use a name (DEBUG/INFO/WARNING/ERROR/CRITICAL) "
             "or an int (0/10/20/30/40/50).</b>"
         ),
     }
@@ -122,7 +125,15 @@ class TestMod(loader.Module):
                     },
                 ]
             )
-        rows.append([{"text": "🚫 Cancel", "callback": self.cancel, "style": "danger"}])
+        rows.append(
+            [
+                {
+                    "text": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Cancel",
+                    "callback": self.cancel,
+                    "style": "danger",
+                }
+            ]
+        )
         return rows
 
     async def _resolve_lvl(self, message, lvl: Optional[int]) -> Optional[int]:
@@ -182,12 +193,16 @@ class TestMod(loader.Module):
             "reply_markup": [
                 [
                     {
-                        "text": "📤 Send anyway",
+                        "text": "<tg-emoji emoji-id='5433614747381538714'>📤</tg-emoji> Send anyway",
                         "callback": self.logscmd,
                         "args": [True, lvl],
                         "style": "primary",
                     },
-                    {"text": "🚫 Cancel", "callback": self.cancel, "style": "danger"},
+                    {
+                        "text": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Cancel",
+                        "callback": self.cancel,
+                        "style": "danger",
+                    },
                 ]
             ],
         }

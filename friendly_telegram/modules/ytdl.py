@@ -224,7 +224,7 @@ class YtDlMod(loader.Module):
         "no_formats": "<b>[YouTube-Dl]</b> No downloadable formats found",
         "pick_kind": (
             "<b>[YouTube-Dl]</b> <b>{title}</b>\n"
-            "👤 <i>{uploader}</i>"
+            "<tg-emoji emoji-id='5373012449597335010'>👤</tg-emoji> <i>{uploader}</i>"
             "{duration}"
             "\n\n<code>{url}</code>\n\nWhat to download?"
         ),
@@ -411,7 +411,7 @@ class YtDlMod(loader.Module):
             rows.append(
                 [
                     {
-                        "text": f"🎬 Video ({len(videos)} options)",
+                        "text": f"<tg-emoji emoji-id='5375464961822695044'>🎬</tg-emoji> Video ({len(videos)} options)",
                         "callback": self._inline_show_video,
                         "args": (token, reply_id),
                     }
@@ -422,14 +422,20 @@ class YtDlMod(loader.Module):
         rows.append(
             [
                 {
-                    "text": f"🎵 Audio ({n} options)",
+                    "text": f"<tg-emoji emoji-id='5188621441926438751'>🎵</tg-emoji> Audio ({n} options)",
                     "callback": self._inline_show_audio,
                     "args": (token, reply_id),
                 }
             ]
         )
         rows.append(
-            [{"text": "✖ Cancel", "callback": self._inline_cancel, "style": "danger"}]
+            [
+                {
+                    "text": "<tg-emoji emoji-id='5226660202035554522'>✖</tg-emoji> Cancel",
+                    "callback": self._inline_cancel,
+                    "style": "danger",
+                }
+            ]
         )
         return rows
 
@@ -438,7 +444,7 @@ class YtDlMod(loader.Module):
     ) -> list:
         buttons = [
             {
-                "text": f"🎬 {_video_label(f)}",
+                "text": f"<tg-emoji emoji-id='5375464961822695044'>🎬</tg-emoji> {_video_label(f)}",
                 "callback": self._inline_pick,
                 "args": (token, "video", f["format_id"], reply_id),
             }
@@ -452,7 +458,10 @@ class YtDlMod(loader.Module):
                     "callback": self._inline_back,
                     "args": (token, reply_id),
                 },
-                {"text": "✖ Cancel", "callback": self._inline_cancel},
+                {
+                    "text": "<tg-emoji emoji-id='5226660202035554522'>✖</tg-emoji> Cancel",
+                    "callback": self._inline_cancel,
+                },
             ]
         )
         return rows
@@ -463,7 +472,7 @@ class YtDlMod(loader.Module):
         if audios:
             buttons = [
                 {
-                    "text": f"🎵 {_audio_label(f)}",
+                    "text": f"<tg-emoji emoji-id='5188621441926438751'>🎵</tg-emoji> {_audio_label(f)}",
                     "callback": self._inline_pick,
                     "args": (token, "audio", f["format_id"], reply_id),
                 }
@@ -474,7 +483,7 @@ class YtDlMod(loader.Module):
             # to the requested mp3 bitrate (preset-based path).
             buttons = [
                 {
-                    "text": f"🎵 {label}",
+                    "text": f"<tg-emoji emoji-id='5188621441926438751'>🎵</tg-emoji> {label}",
                     "callback": self._inline_pick,
                     "args": (token, "audio_preset", quality, reply_id),
                 }
@@ -488,7 +497,10 @@ class YtDlMod(loader.Module):
                     "callback": self._inline_back,
                     "args": (token, reply_id),
                 },
-                {"text": "✖ Cancel", "callback": self._inline_cancel},
+                {
+                    "text": "<tg-emoji emoji-id='5226660202035554522'>✖</tg-emoji> Cancel",
+                    "callback": self._inline_cancel,
+                },
             ]
         )
         return rows

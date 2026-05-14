@@ -36,8 +36,8 @@ class UpdaterMod(loader.Module):
     strings = {
         "name": "Updater",
         "source": "ℹ️ <b>Read the source code</b> <a href='{}'>here</a>",
-        "restarting_caption": "🔄 <b>Restarting...</b>",
-        "success": "✅ <b>Restart successful!</b>",
+        "restarting_caption": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> <b>Restarting...</b>",
+        "success": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Restart successful!</b>",
         "not_implemented": (
             "🛠 <b>Self-update is not implemented yet.</b>\n\n"
             "<b>Until it lands</b>, update the package from your shell:\n"

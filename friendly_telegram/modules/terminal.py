@@ -291,26 +291,26 @@ class TerminalMod(loader.Module):
         "flood_wait_protect_cfg_doc": (
             "How long to wait in seconds between edits in commands"
         ),
-        "what_to_kill": "🎯 <b>Reply to a terminal command to terminate it</b>",
+        "what_to_kill": "<tg-emoji emoji-id='5350460637182993292'>🎯</tg-emoji> <b>Reply to a terminal command to terminate it</b>",
         "kill_fail": "⚠️ <b>Could not kill process</b>",
-        "killed": "💀 <b>Killed</b>",
-        "no_cmd": "🤷 <b>No command is running in that message</b>",
-        "running": "🚀 <b>Command:</b> <code>{}</code>",
-        "finished": "\n🏁 <b>Code:</b> <code>{}</code>",
-        "stdout": "\n📤 <b>Stdout:</b>\n<code>",
-        "stderr": "</code>\n\n📥 <b>Stderr:</b>\n<code>",
+        "killed": "<tg-emoji emoji-id='5370971163310693562'>💀</tg-emoji> <b>Killed</b>",
+        "no_cmd": "<tg-emoji emoji-id='5395517004486551976'>🤷</tg-emoji> <b>No command is running in that message</b>",
+        "running": "<tg-emoji emoji-id='5445284980978621387'>🚀</tg-emoji> <b>Command:</b> <code>{}</code>",
+        "finished": "\n<tg-emoji emoji-id='5411520005386806155'>🏁</tg-emoji> <b>Code:</b> <code>{}</code>",
+        "stdout": "\n<tg-emoji emoji-id='5433614747381538714'>📤</tg-emoji> <b>Stdout:</b>\n<code>",
+        "stderr": "</code>\n\n<tg-emoji emoji-id='5433811242135331842'>📥</tg-emoji> <b>Stderr:</b>\n<code>",
         "end": "</code>",
-        "auth_failed": "🚫 <b>Authentication failed, please try again</b>",
+        "auth_failed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Authentication failed, please try again</b>",
         "auth_needed": (
-            '🔐 <a href="tg://user?id={}">Interactive authentication required</a>'
+            '<tg-emoji emoji-id="5472308992514464048">🔐</tg-emoji> <a href="tg://user?id={}">Interactive authentication required</a>'
         ),
         "auth_msg": (
-            "🔑 <b>Please edit this message to the password for</b> "
+            "<tg-emoji emoji-id='5330115548900501467'>🔑</tg-emoji> <b>Please edit this message to the password for</b> "
             "<code>{}</code> <b>to run</b> <code>{}</code>"
         ),
-        "auth_locked": "🔒 <b>Authentication failed, please try again later</b>",
+        "auth_locked": "<tg-emoji emoji-id='5296369303661067030'>🔒</tg-emoji> <b>Authentication failed, please try again later</b>",
         "auth_ongoing": "⏳ <b>Authenticating...</b>",
-        "done": "✅ <b>Done</b>",
+        "done": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Done</b>",
     }
 
     def __init__(self) -> None:

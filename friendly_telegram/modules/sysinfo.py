@@ -586,23 +586,25 @@ def _render_overview(snap: Dict[str, Any]) -> str:
     )
 
     lines = [
-        "🖥 <b>System overview</b>",
+        "<tg-emoji emoji-id='5282843764451195532'>🖥</tg-emoji> <b>System overview</b>",
         f"🏷 <b>Host:</b> <code>{utils.escape_html(h['hostname'])}</code>",
-        f"🐧 <b>OS:</b> <code>{utils.escape_html(h['distro'])}</code>",
+        f"<tg-emoji emoji-id='5361541227604878624'>🐧</tg-emoji> <b>OS:</b> <code>{utils.escape_html(h['distro'])}</code>",
         (
-            f"🧬 <b>Kernel:</b> <code>{utils.escape_html(h['kernel'])}</code> "
+            f"<tg-emoji emoji-id='5217444336089714383'>🧬</tg-emoji> <b>Kernel:</b> <code>{utils.escape_html(h['kernel'])}</code> "
             f"(<code>{utils.escape_html(h['arch'])}</code>)"
         ),
-        f"🐍 <b>Python:</b> <code>{utils.escape_html(h['python'])}</code>",
+        f"<tg-emoji emoji-id='5409076727341130651'>🐍</tg-emoji> <b>Python:</b> <code>{utils.escape_html(h['python'])}</code>",
     ]
     if h.get("uptime"):
         lines.append(f"⏱ <b>Uptime:</b> <code>{_human_seconds(h['uptime'])}</code>")
     if proc.get("uptime"):
         lines.append(
-            f"🤖 <b>Bot uptime:</b> <code>{_human_seconds(proc['uptime'])}</code>"
+            f"<tg-emoji emoji-id='5372981976804366741'>🤖</tg-emoji> <b>Bot uptime:</b> <code>{_human_seconds(proc['uptime'])}</code>"
         )
     lines.append("")
-    lines.append(f"⚡ <b>CPU:</b> {cpu_line}")
+    lines.append(
+        f"<tg-emoji emoji-id='5431449001532594346'>⚡</tg-emoji> <b>CPU:</b> {cpu_line}"
+    )
     lines.append(f"💾 <b>RAM:</b> {mem_line}")
     lines.append(f"📀 <b>Disk:</b> {disk_line}")
     return "\n".join(lines)
@@ -611,8 +613,8 @@ def _render_overview(snap: Dict[str, Any]) -> str:
 def _render_cpu(snap: Dict[str, Any]) -> str:
     cpu = snap["cpu"]
     lines = [
-        "⚡ <b>CPU</b>",
-        f"🧠 <b>Model:</b> <code>{utils.escape_html(cpu.get('model') or 'Unknown')}</code>",
+        "<tg-emoji emoji-id='5431449001532594346'>⚡</tg-emoji> <b>CPU</b>",
+        f"<tg-emoji emoji-id='5237799019329105246'>🧠</tg-emoji> <b>Model:</b> <code>{utils.escape_html(cpu.get('model') or 'Unknown')}</code>",
     ]
     cores = []
     if cpu.get("physical"):
@@ -625,13 +627,19 @@ def _render_cpu(snap: Dict[str, Any]) -> str:
         freq = f"{cpu['freq_mhz']:.0f} MHz"
         if cpu.get("freq_max_mhz"):
             freq += f" (max {cpu['freq_max_mhz']:.0f})"
-        lines.append(f"📈 <b>Frequency:</b> <code>{freq}</code>")
+        lines.append(
+            f"<tg-emoji emoji-id='5373001317042101552'>📈</tg-emoji> <b>Frequency:</b> <code>{freq}</code>"
+        )
     if cpu.get("loadavg"):
         la = cpu["loadavg"]
-        lines.append(f"📊 <b>Load avg:</b> <code>{la[0]} / {la[1]} / {la[2]}</code>")
+        lines.append(
+            f"<tg-emoji emoji-id='5431577498364158238'>📊</tg-emoji> <b>Load avg:</b> <code>{la[0]} / {la[1]} / {la[2]}</code>"
+        )
     pct = cpu.get("percent_total")
     if pct is not None:
-        lines.append(f"🔥 <b>Total:</b> {_bar(pct)} <code>{pct:.1f}%</code>")
+        lines.append(
+            f"<tg-emoji emoji-id='5420315771991497307'>🔥</tg-emoji> <b>Total:</b> {_bar(pct)} <code>{pct:.1f}%</code>"
+        )
     per = cpu.get("percent_per_core") or []
     if per:
         lines.append("")
@@ -651,7 +659,9 @@ def _render_memory(snap: Dict[str, Any]) -> str:
     lines = ["💾 <b>Memory</b>"]
     if mem:
         pct = mem.get("percent", 0.0) or 0.0
-        lines.append(f"🧠 <b>RAM:</b> {_bar(pct)} <code>{pct:.1f}%</code>")
+        lines.append(
+            f"<tg-emoji emoji-id='5237799019329105246'>🧠</tg-emoji> <b>RAM:</b> {_bar(pct)} <code>{pct:.1f}%</code>"
+        )
         lines.append(
             f"   <code>{_human_bytes(mem.get('used'))} / "
             f"{_human_bytes(mem.get('total'))}</code> "
@@ -678,24 +688,24 @@ def _render_disk(snap: Dict[str, Any]) -> str:
     pct = disk.get("percent", 0.0) or 0.0
     return (
         "📀 <b>Disk</b>\n"
-        f"📂 <b>Path:</b> <code>{utils.escape_html(disk.get('path') or '/')}</code>\n"
-        f"📊 {_bar(pct)} <code>{pct:.1f}%</code>\n"
+        f"<tg-emoji emoji-id='5431721976769027887'>📂</tg-emoji> <b>Path:</b> <code>{utils.escape_html(disk.get('path') or '/')}</code>\n"
+        f"<tg-emoji emoji-id='5431577498364158238'>📊</tg-emoji> {_bar(pct)} <code>{pct:.1f}%</code>\n"
         f"📦 <b>Used:</b> <code>{_human_bytes(disk.get('used'))}</code>\n"
-        f"🆓 <b>Free:</b> <code>{_human_bytes(disk.get('free'))}</code>\n"
+        f"<tg-emoji emoji-id='5364112491381006601'>🆓</tg-emoji> <b>Free:</b> <code>{_human_bytes(disk.get('free'))}</code>\n"
         f"🗄 <b>Total:</b> <code>{_human_bytes(disk.get('total'))}</code>"
     )
 
 
 def _render_network(snap: Dict[str, Any]) -> str:
     net = snap["net"]
-    lines = ["🌐 <b>Network</b>"]
+    lines = ["<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> <b>Network</b>"]
     if net.get("bytes_sent") is not None:
         lines.append(
-            f"📤 <b>Sent:</b> <code>{_human_bytes(net['bytes_sent'])}</code>"
+            f"<tg-emoji emoji-id='5433614747381538714'>📤</tg-emoji> <b>Sent:</b> <code>{_human_bytes(net['bytes_sent'])}</code>"
             f"  ({net.get('packets_sent', 0):,} pkt)"
         )
         lines.append(
-            f"📥 <b>Recv:</b> <code>{_human_bytes(net['bytes_recv'])}</code>"
+            f"<tg-emoji emoji-id='5433811242135331842'>📥</tg-emoji> <b>Recv:</b> <code>{_human_bytes(net['bytes_recv'])}</code>"
             f"  ({net.get('packets_recv', 0):,} pkt)"
         )
     else:
@@ -703,7 +713,9 @@ def _render_network(snap: Dict[str, Any]) -> str:
     ifaces = net.get("ifaces") or []
     if ifaces:
         lines.append("")
-        lines.append("🛰 <b>Interfaces:</b>")
+        lines.append(
+            "<tg-emoji emoji-id='5321304062715517873'>🛰</tg-emoji> <b>Interfaces:</b>"
+        )
         for name, ip in ifaces:
             lines.append(
                 f"   <code>{utils.escape_html(name)}</code> → "
@@ -715,9 +727,13 @@ def _render_network(snap: Dict[str, Any]) -> str:
 def _render_process(snap: Dict[str, Any]) -> str:
     proc = snap["proc"]
     if not proc:
-        return "🤖 <b>Process</b>\n<code>unavailable</code>"
-    lines = ["🤖 <b>Process</b> (this userbot)"]
-    lines.append(f"🆔 <b>PID:</b> <code>{proc.get('pid')}</code>")
+        return "<tg-emoji emoji-id='5372981976804366741'>🤖</tg-emoji> <b>Process</b>\n<code>unavailable</code>"
+    lines = [
+        "<tg-emoji emoji-id='5372981976804366741'>🤖</tg-emoji> <b>Process</b> (this userbot)"
+    ]
+    lines.append(
+        f"<tg-emoji emoji-id='5818885490065017876'>🆔</tg-emoji> <b>PID:</b> <code>{proc.get('pid')}</code>"
+    )
     if proc.get("uptime"):
         lines.append(f"⏱ <b>Uptime:</b> <code>{_human_seconds(proc['uptime'])}</code>")
     if proc.get("rss") is not None:
@@ -727,10 +743,12 @@ def _render_process(snap: Dict[str, Any]) -> str:
     if proc.get("threads") is not None:
         lines.append(f"🧵 <b>Threads:</b> <code>{proc['threads']}</code>")
     if proc.get("fds") is not None:
-        lines.append(f"📎 <b>FDs:</b> <code>{proc['fds']}</code>")
+        lines.append(
+            f"<tg-emoji emoji-id='5377844313575150051'>📎</tg-emoji> <b>FDs:</b> <code>{proc['fds']}</code>"
+        )
     if proc.get("cpu_percent") is not None:
         lines.append(
-            f"🔥 <b>CPU:</b> {_bar(proc['cpu_percent'])} "
+            f"<tg-emoji emoji-id='5420315771991497307'>🔥</tg-emoji> <b>CPU:</b> {_bar(proc['cpu_percent'])} "
             f"<code>{proc['cpu_percent']:.1f}%</code>"
         )
     return "\n".join(lines)
@@ -759,16 +777,16 @@ class SysInfoMod(loader.Module):
         "psutil_missing": (
             "\n\n⚠️ <i>psutil not installed — using /proc fallbacks.</i>"
         ),
-        "title_overview": "🖥 Overview",
-        "title_cpu": "⚡ CPU",
+        "title_overview": "<tg-emoji emoji-id='5282843764451195532'>🖥</tg-emoji> Overview",
+        "title_cpu": "<tg-emoji emoji-id='5431449001532594346'>⚡</tg-emoji> CPU",
         "title_memory": "💾 RAM",
         "title_disk": "📀 Disk",
-        "title_network": "🌐 Network",
-        "title_process": "🤖 Process",
-        "btn_refresh": "🔄 Refresh",
-        "btn_close": "🚫 Close",
-        "answer_refreshed": "🔄 Refreshed",
-        "answer_closed": "🚫 Closed",
+        "title_network": "<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> Network",
+        "title_process": "<tg-emoji emoji-id='5372981976804366741'>🤖</tg-emoji> Process",
+        "btn_refresh": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> Refresh",
+        "btn_close": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Close",
+        "answer_refreshed": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> Refreshed",
+        "answer_closed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Closed",
         "_disk_path_doc": (
             "Mount point inspected for disk stats. Empty = userbot data dir."
         ),
