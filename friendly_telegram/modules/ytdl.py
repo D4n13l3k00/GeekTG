@@ -250,7 +250,7 @@ class YtDlMod(loader.Module):
     # ---------------------------------------------------------------- helpers
 
     def _chats(self) -> List[int]:
-        return self.ctx.db.get(_DB_NAME, "chats", [])
+        return self.ctx.db.get(_DB_NAME, "chats", []) or []
 
     def _save_chats(self, chats: List[int]) -> None:
         self.ctx.db.set(_DB_NAME, "chats", chats)
