@@ -37,37 +37,37 @@ class GeekSecurityMod(loader.Module):
 
     strings = {
         "name": "GeekSecurity",
-        "no_command": "🚫 <b>Command </b><code>{}</code><b> not found!</b>",
-        "permissions": "🔐 <b>Here you can configure permissions for </b><code>{}{}</code>",
+        "no_command": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Command </b><code>{}</code><b> not found!</b>",
+        "permissions": "<tg-emoji emoji-id='5472308992514464048'>🔐</tg-emoji> <b>Here you can configure permissions for </b><code>{}{}</code>",
         "close_menu": "🙈 Close this menu",
-        "global": "🔐 <b>Here you can configure global bounding mask. If the permission is excluded here, it is excluded everywhere!</b>",
-        "owner": "🤴 Owner",
+        "global": "<tg-emoji emoji-id='5472308992514464048'>🔐</tg-emoji> <b>Here you can configure global bounding mask. If the permission is excluded here, it is excluded everywhere!</b>",
+        "owner": "<tg-emoji emoji-id='5217822164362739968'>🤴</tg-emoji> Owner",
         "sudo": "🤵 Sudo",
         "support": "💁‍♂️ Support",
         "group_owner": "🧛‍♂️ Group owner",
-        "group_admin_add_admins": "👨‍💻 Admin (add members)",
-        "group_admin_change_info": "👨‍💻 Admin (change info)",
-        "group_admin_ban_users": "👨‍💻 Admin (ban)",
-        "group_admin_delete_messages": "👨‍💻 Admin (delete msgs)",
-        "group_admin_pin_messages": "👨‍💻 Admin (pin)",
-        "group_admin_invite_users": "👨‍💻 Admin (invite)",
-        "group_admin": "👨‍💻 Admin (any)",
-        "group_member": "👥 In group",
-        "pm": "🤙 In PM",
-        "owner_list": "🤴 <b>Users in group </b><code>owner</code><b>:</b>\n\n{}",
+        "group_admin_add_admins": "<tg-emoji emoji-id='5190498849440931467'>👨‍💻</tg-emoji> Admin (add members)",
+        "group_admin_change_info": "<tg-emoji emoji-id='5190498849440931467'>👨‍💻</tg-emoji> Admin (change info)",
+        "group_admin_ban_users": "<tg-emoji emoji-id='5190498849440931467'>👨‍💻</tg-emoji> Admin (ban)",
+        "group_admin_delete_messages": "<tg-emoji emoji-id='5190498849440931467'>👨‍💻</tg-emoji> Admin (delete msgs)",
+        "group_admin_pin_messages": "<tg-emoji emoji-id='5190498849440931467'>👨‍💻</tg-emoji> Admin (pin)",
+        "group_admin_invite_users": "<tg-emoji emoji-id='5190498849440931467'>👨‍💻</tg-emoji> Admin (invite)",
+        "group_admin": "<tg-emoji emoji-id='5190498849440931467'>👨‍💻</tg-emoji> Admin (any)",
+        "group_member": "<tg-emoji emoji-id='5372926953978341366'>👥</tg-emoji> In group",
+        "pm": "<tg-emoji emoji-id='5469774158650942877'>🤙</tg-emoji> In PM",
+        "owner_list": "<tg-emoji emoji-id='5217822164362739968'>🤴</tg-emoji> <b>Users in group </b><code>owner</code><b>:</b>\n\n{}",
         "sudo_list": "🤵‍♀️ <b>Users in group </b><code>sudo</code><b>:</b>\n\n{}",
         "support_list": "🙋‍♂️ <b>Users in group </b><code>support</code><b>:</b>\n\n{}",
-        "no_owner": "🤴 <b>There is no users in group </b><code>owner</code>",
+        "no_owner": "<tg-emoji emoji-id='5217822164362739968'>🤴</tg-emoji> <b>There is no users in group </b><code>owner</code>",
         "no_sudo": "🤵‍♀️ <b>There is no users in group </b><code>sudo</code>",
         "no_support": "🙋‍♂️ <b>There is no users in group </b><code>support</code>",
-        "owner_added": '🤴 <b><a href="tg://user?id={}">{}</a> added to group </b><code>owner</code>',
+        "owner_added": '<tg-emoji emoji-id="5217822164362739968">🤴</tg-emoji> <b><a href="tg://user?id={}">{}</a> added to group </b><code>owner</code>',
         "sudo_added": '🤵‍♀️ <b><a href="tg://user?id={}">{}</a> added to group </b><code>sudo</code>',
         "support_added": '🙋‍♂️ <b><a href="tg://user?id={}">{}</a> added to group </b><code>support</code>',
-        "owner_removed": '🤴 <b><a href="tg://user?id={}">{}</a> removed from group </b><code>owner</code>',
+        "owner_removed": '<tg-emoji emoji-id="5217822164362739968">🤴</tg-emoji> <b><a href="tg://user?id={}">{}</a> removed from group </b><code>owner</code>',
         "sudo_removed": '🤵‍♀️ <b><a href="tg://user?id={}">{}</a> removed from group </b><code>sudo</code>',
         "support_removed": '🙋‍♂️ <b><a href="tg://user?id={}">{}</a> removed from group </b><code>support</code>',
-        "no_user": "🚫 <b>Specify user to permit</b>",
-        "not_a_user": "🚫 <b>Specified entity is not a user</b>",
+        "no_user": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Specify user to permit</b>",
+        "not_a_user": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Specified entity is not a user</b>",
         "li": '⦿ <b><a href="tg://user?id={}">{}</a></b>',
         "warning": (
             '⚠️ <b>Please, confirm, that you want to add <a href="tg://user?id={}">{}</a> '
@@ -77,7 +77,7 @@ class GeekSecurityMod(loader.Module):
         ),
         "cancel": "🚫 Cancel",
         "confirm": "👑 Confirm",
-        "self": "🚫 <b>You can't promote/demote yourself!</b>",
+        "self": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>You can't promote/demote yourself!</b>",
     }
 
     async def client_ready(self, client, db) -> None:
@@ -99,7 +99,8 @@ class GeekSecurityMod(loader.Module):
 
     def _current_cmd_mask(self, cmd: FunctionType) -> int:
         client: Any = self.ctx.client
-        return self.ctx.db.get(security.__name__, "masks", {}).get(
+        masks = self.ctx.db.get(security.__name__, "masks", {}) or {}
+        return masks.get(
             self._cmd_key(cmd),
             getattr(
                 cmd,
@@ -109,14 +110,23 @@ class GeekSecurityMod(loader.Module):
         )
 
     def _current_global_mask(self) -> int:
-        return self.ctx.db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
+        value = self.ctx.db.get(security.__name__, "bounding_mask", DEFAULT_PERMISSIONS)
+        return value if value is not None else DEFAULT_PERMISSIONS
 
     def _perm_buttons(self, mask: int, callback, prefix_args: tuple) -> list:
         """Build the permission toggle keyboard for either single-cmd or global."""
         perms = self._perms_map(mask)
+
+        def _icon(level: bool) -> str:
+            return (
+                "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji>"
+                if level
+                else "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji>"
+            )
+
         buttons = [
             {
-                "text": f"{'✅' if level else '🚫'} {self.strings[group]}",
+                "text": f"{_icon(level)} {self.strings[group]}",
                 "callback": callback,
                 "args": (*prefix_args, group, not level),
             }
@@ -151,7 +161,7 @@ class GeekSecurityMod(loader.Module):
     ) -> None:
         cmd = self.allmodules.commands[command]
         bit = security.BITMAP[group.upper()]
-        masks = self.ctx.db.get(security.__name__, "masks", {})
+        masks = self.ctx.db.get(security.__name__, "masks", {}) or {}
         masks[self._cmd_key(cmd)] = _flip(self._current_cmd_mask(cmd), bit, level)
         self.ctx.db.set(security.__name__, "masks", masks)
 
@@ -242,11 +252,11 @@ class GeekSecurityMod(loader.Module):
         return user
 
     def _group_add(self, group: str, user_id: int) -> None:
-        ids = set(self.ctx.db.get(security.__name__, group, [])) | {user_id}
+        ids = set(self.ctx.db.get(security.__name__, group, []) or []) | {user_id}
         self.ctx.db.set(security.__name__, group, list(ids))
 
     def _group_remove(self, group: str, user_id: int) -> None:
-        ids = set(self.ctx.db.get(security.__name__, group, [])) - {user_id}
+        ids = set(self.ctx.db.get(security.__name__, group, []) or []) - {user_id}
         self.ctx.db.set(security.__name__, group, list(ids))
 
     async def _add_to_group(
@@ -319,7 +329,7 @@ class GeekSecurityMod(loader.Module):
         )
 
     async def _list_group(self, message: Message, group: str) -> None:
-        ids = self.ctx.db.get(security.__name__, group, [])
+        ids = self.ctx.db.get(security.__name__, group, []) or []
         if group == "owner":
             ids = ids + [self._me]
 

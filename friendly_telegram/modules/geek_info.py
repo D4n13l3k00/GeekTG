@@ -31,9 +31,9 @@ class GeekInfoMod(loader.Module):
         "_photo_url_doc": "You can set your own photo to geek info.",
         "default_message": (
             "🕶 <b>GeekTG Userbot</b>\n\n"
-            "🤴 <b>Owner:</b> {owner}\n"
-            "🔮 <b>Version:</b> <i>{version}</i>\n"
-            "🧱 <b>Build:</b> {build}\n"
+            "<tg-emoji emoji-id='5217822164362739968'>🤴</tg-emoji> <b>Owner:</b> {owner}\n"
+            "<tg-emoji emoji-id='5361837567463399422'>🔮</tg-emoji> <b>Version:</b> <i>{version}</i>\n"
+            "<tg-emoji emoji-id='5436275698664759373'>🧱</tg-emoji> <b>Build:</b> {build}\n"
             "{upd}\n\n"
             "{platform}"
         ),
@@ -65,7 +65,9 @@ class GeekInfoMod(loader.Module):
             return ""
         if diff:
             return "⚠️ <b>Update required:</b> <code>.update</code>"
-        return "✅ <b>Up-to-date</b>"
+        return (
+            "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Up-to-date</b>"
+        )
 
     def _owner_html(self) -> str:
         return (

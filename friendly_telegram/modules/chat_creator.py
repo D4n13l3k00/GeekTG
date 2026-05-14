@@ -14,6 +14,7 @@ Inline
 # scope: inline
 
 import logging
+from typing import Optional
 
 from telethon.tl.custom import Message
 from telethon.tl.functions.channels import CreateChannelRequest
@@ -66,26 +67,26 @@ class ChatCreatorMod(loader.Module):
         "creating": "⏳ <b>Creating {type}</b> <i>{title}</i>…",
         "done_channel": (
             "📢 <b>Channel created!</b>\n\n"
-            "📌 <b>Title:</b> <code>{title}</code>\n"
-            "🔗 <b>Invite:</b> {link}"
+            "<tg-emoji emoji-id='5397782960512444700'>📌</tg-emoji> <b>Title:</b> <code>{title}</code>\n"
+            "<tg-emoji emoji-id='5375129357373165375'>🔗</tg-emoji> <b>Invite:</b> {link}"
         ),
         "done_group": (
-            "👥 <b>Group created!</b>\n\n"
-            "📌 <b>Title:</b> <code>{title}</code>\n"
-            "🔗 <b>Invite:</b> {link}"
+            "<tg-emoji emoji-id='5372926953978341366'>👥</tg-emoji> <b>Group created!</b>\n\n"
+            "<tg-emoji emoji-id='5397782960512444700'>📌</tg-emoji> <b>Title:</b> <code>{title}</code>\n"
+            "<tg-emoji emoji-id='5375129357373165375'>🔗</tg-emoji> <b>Invite:</b> {link}"
         ),
         "done_supergroup": (
-            "🌐 <b>Supergroup created!</b>\n\n"
-            "📌 <b>Title:</b> <code>{title}</code>\n"
-            "🔗 <b>Invite:</b> {link}"
+            "<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> <b>Supergroup created!</b>\n\n"
+            "<tg-emoji emoji-id='5397782960512444700'>📌</tg-emoji> <b>Title:</b> <code>{title}</code>\n"
+            "<tg-emoji emoji-id='5375129357373165375'>🔗</tg-emoji> <b>Invite:</b> {link}"
         ),
-        "error": "🚫 <b>Failed to create:</b> <code>{err}</code>",
-        "no_title": "❓ <b>Specify a title:</b> <code>{usage}</code>",
+        "error": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Failed to create:</b> <code>{err}</code>",
+        "no_title": "<tg-emoji emoji-id='5467666648263564704'>❓</tg-emoji> <b>Specify a title:</b> <code>{usage}</code>",
         # inline
-        "inline_pick": "🗂 <b>What do you want to create?</b>",
+        "inline_pick": "<tg-emoji emoji-id='5431736674147114227'>🗂</tg-emoji> <b>What do you want to create?</b>",
         "inline_title_prompt": (
             "✏️ <b>Send a title for the new {type}</b>\n\n"
-            "📌 <b>Current title:</b> <code>{title}</code>"
+            "<tg-emoji emoji-id='5397782960512444700'>📌</tg-emoji> <b>Current title:</b> <code>{title}</code>"
         ),
         # Shown in the inline-switch placeholder (no HTML rendering there).
         "inline_title_placeholder": "Send a title for the new {type}",
@@ -96,8 +97,8 @@ class ChatCreatorMod(loader.Module):
         "btn_custom": "✏️ Enter title",
         "btn_back": "⬅️ Back",
         "btn_close": "🚫 Close",
-        "cancelled": "✖️ <b>Cancelled.</b>",
-        "closed": "🚫 <b>Closed.</b>",
+        "cancelled": "<tg-emoji emoji-id='5226660202035554522'>✖️</tg-emoji> <b>Cancelled.</b>",
+        "closed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Closed.</b>",
     }
 
     # ------------------------------------------------------------------ commands
@@ -228,7 +229,7 @@ class ChatCreatorMod(loader.Module):
         call,
         chat_type: str,
         title: str,
-        inline_message_id: str = None,
+        inline_message_id: Optional[str] = None,
     ) -> None:
         """Run creation from inline; edit the form with the result."""
         edit_kwargs = (

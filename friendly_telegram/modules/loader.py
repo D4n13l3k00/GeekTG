@@ -122,51 +122,51 @@ class LoaderMod(loader.Module):
     strings = {
         "name": "Loader",
         "repo_config_doc": "Fully qualified URL to a module repo",
-        "avail_header": "📥 <b>Available official modules from repo</b>",
+        "avail_header": "<tg-emoji emoji-id='5433811242135331842'>📥</tg-emoji> <b>Available official modules from repo</b>",
         "select_preset": "⚠️ <b>Please select a preset</b>",
-        "no_preset": "🚫 <b>Preset not found</b>",
-        "preset_loaded": "✅ <b>Preset loaded</b>",
-        "no_module": "🚫 <b>Module not available in repo.</b>",
-        "no_file": "🚫 <b>File not found</b>",
+        "no_preset": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Preset not found</b>",
+        "preset_loaded": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Preset loaded</b>",
+        "no_module": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Module not available in repo.</b>",
+        "no_file": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>File not found</b>",
         "provide_module": "⚠️ <b>Provide a module to load</b>",
-        "bad_unicode": "🚫 <b>Invalid Unicode formatting in module</b>",
-        "load_failed": "🚫 <b>Loading failed. See logs for details</b>",
-        "loaded": "📥 <b>Module <code>{}</code>{} loaded.</b>{}",
-        "no_class": "❓ <b>What class needs to be unloaded?</b>",
-        "unloaded": "📤 <b>Module unloaded.</b>",
-        "not_unloaded": "🚫 <b>Module not unloaded.</b>",
-        "requirements_failed": "🚫 <b>Requirements installation failed</b>",
-        "requirements_installing": "🔄 <b>Installing requirements...</b>",
-        "requirements_restart": "🔄 <b>Requirements installed, but a restart is required</b>",
-        "all_modules_deleted": "✅ <b>All modules deleted</b>",
+        "bad_unicode": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Invalid Unicode formatting in module</b>",
+        "load_failed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Loading failed. See logs for details</b>",
+        "loaded": "<tg-emoji emoji-id='5433811242135331842'>📥</tg-emoji> <b>Module <code>{}</code>{} loaded.</b>{}",
+        "no_class": "<tg-emoji emoji-id='5467666648263564704'>❓</tg-emoji> <b>What class needs to be unloaded?</b>",
+        "unloaded": "<tg-emoji emoji-id='5433614747381538714'>📤</tg-emoji> <b>Module unloaded.</b>",
+        "not_unloaded": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Module not unloaded.</b>",
+        "requirements_failed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Requirements installation failed</b>",
+        "requirements_installing": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> <b>Installing requirements...</b>",
+        "requirements_restart": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> <b>Requirements installed, but a restart is required</b>",
+        "all_modules_deleted": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>All modules deleted</b>",
         "no_modules": "⚠️ <b>You have no custom modules!</b>",
-        "searching": "🔍 <b>Searching...</b>",
-        "file": "📥 <b>File of module {}:</b>",
-        "module_link": '📥 <a href="{}">Link</a> for module {}: \n<code>{}</code>',
-        "not_found_info": "🚫 Request to find module with name {} failed due to:",
-        "not_found_c_info": "🚫 Request to find module with command {} failed due to:",
-        "not_found": "🚫 <b>Module was not found</b>",
-        "file_core": "📥 <b>File of core module {}:</b>",
-        "loading": "🔄 <b>Loading...</b>",
-        "url_invalid": "🚫 <b>URL invalid</b>",
-        "args_incorrect": "🚫 <b>Args incorrect</b>",
-        "repo_loaded": "✅ <b>Repository loaded</b>",
-        "repo_not_loaded": "🚫 <b>Repository not loaded</b>",
-        "repo_unloaded": "🔄 <b>Repository unloaded, but restart is required to unload repository modules</b>",
-        "repo_not_unloaded": "🚫 <b>Repository not unloaded</b>",
-        "single_cmd": "\n📍 <code>{}{}</code> 👉🏻 ",
-        "undoc_cmd": "👁‍🗨 No docs",
-        "ihandler": "\n🎹 <i>Inline</i>: <code>{}</code> 👉🏻 ",
-        "undoc_ihandler": "👁‍🗨 No docs",
-        "chandler": "\n🖱 <i>Callback</i>: <code>{}</code> 👉🏻 ",
-        "undoc_chandler": "👁‍🗨 No docs",
+        "searching": "<tg-emoji emoji-id='5188217332748527444'>🔍</tg-emoji> <b>Searching...</b>",
+        "file": "<tg-emoji emoji-id='5433811242135331842'>📥</tg-emoji> <b>File of module {}:</b>",
+        "module_link": '<tg-emoji emoji-id="5433811242135331842">📥</tg-emoji> <a href="{}">Link</a> for module {}: \n<code>{}</code>',
+        "not_found_info": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Request to find module with name {} failed due to:",
+        "not_found_c_info": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> Request to find module with command {} failed due to:",
+        "not_found": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Module was not found</b>",
+        "file_core": "<tg-emoji emoji-id='5433811242135331842'>📥</tg-emoji> <b>File of core module {}:</b>",
+        "loading": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> <b>Loading...</b>",
+        "url_invalid": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>URL invalid</b>",
+        "args_incorrect": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Args incorrect</b>",
+        "repo_loaded": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Repository loaded</b>",
+        "repo_not_loaded": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Repository not loaded</b>",
+        "repo_unloaded": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> <b>Repository unloaded, but restart is required to unload repository modules</b>",
+        "repo_not_unloaded": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Repository not unloaded</b>",
+        "single_cmd": "\n<tg-emoji emoji-id='5391032818111363540'>📍</tg-emoji> <code>{}{}</code> <tg-emoji emoji-id='5471978009449731768'>👉</tg-emoji>🏻 ",
+        "undoc_cmd": "<tg-emoji emoji-id='5228686859663585439'>👁‍🗨</tg-emoji> No docs",
+        "ihandler": "\n<tg-emoji emoji-id='5467398680959023683'>🎹</tg-emoji> <i>Inline</i>: <code>{}</code> <tg-emoji emoji-id='5471978009449731768'>👉</tg-emoji>🏻 ",
+        "undoc_ihandler": "<tg-emoji emoji-id='5228686859663585439'>👁‍🗨</tg-emoji> No docs",
+        "chandler": "\n🖱 <i>Callback</i>: <code>{}</code> <tg-emoji emoji-id='5471978009449731768'>👉</tg-emoji>🏻 ",
+        "undoc_chandler": "<tg-emoji emoji-id='5228686859663585439'>👁‍🗨</tg-emoji> No docs",
         "inline_init_failed": (
-            "🚫 <b>This module requires GeekTG inline feature and initialization of InlineManager failed</b>\n"
+            "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>This module requires GeekTG inline feature and initialization of InlineManager failed</b>\n"
             "<i>Please, remove one of your old bots from @BotFather and restart userbot to load this module</i>"
         ),
-        "version_incompatible": "🚫 <b>This module requires GeekTG {}+\nPlease, update with </b><code>.update</code>",
-        "ffmpeg_required": "🚫 <b>This module requires FFMPEG, which is not installed</b>",
-        "developer": "\n🧑‍💻 <b>Developer: </b><code>{}</code>",
+        "version_incompatible": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>This module requires GeekTG {}+\nPlease, update with </b><code>.update</code>",
+        "ffmpeg_required": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>This module requires FFMPEG, which is not installed</b>",
+        "developer": "\n<tg-emoji emoji-id='5190458330719461749'>🧑‍💻</tg-emoji> <b>Developer: </b><code>{}</code>",
     }
 
     def __init__(self):
@@ -188,9 +188,9 @@ class LoaderMod(loader.Module):
                     __name__,
                     "loaded_modules",
                     list(
-                        set(self.ctx.db.get(__name__, "loaded_modules", [])).union(
-                            [args]
-                        )
+                        set(
+                            self.ctx.db.get(__name__, "loaded_modules", []) or []
+                        ).union([args])
                     ),
                 )
         else:
@@ -234,8 +234,8 @@ class LoaderMod(loader.Module):
         todo = await self.get_repo_list(
             self.ctx.db.get(__name__, "chosen_preset", "none")
         )
-        todo = todo.difference(self.ctx.db.get(__name__, "unloaded_modules", []))
-        todo.update(self.ctx.db.get(__name__, "loaded_modules", []))
+        todo = todo.difference(self.ctx.db.get(__name__, "unloaded_modules", []) or [])
+        todo.update(self.ctx.db.get(__name__, "loaded_modules", []) or [])
         return todo
 
     async def get_repo_list(self, preset=None):
@@ -410,7 +410,8 @@ class LoaderMod(loader.Module):
             except loader.LoadError as e:
                 if message:
                     await utils.answer(
-                        message, f"🚫 <b>{utils.escape_html(str(e))}</b>"
+                        message,
+                        f"<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>{utils.escape_html(str(e))}</b>",
                     )
                 return
         except Exception as e:
@@ -445,7 +446,8 @@ class LoaderMod(loader.Module):
             except loader.LoadError as e:
                 if message:
                     await utils.answer(
-                        message, f"🚫 <b>{utils.escape_html(str(e))}</b>"
+                        message,
+                        f"<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>{utils.escape_html(str(e))}</b>",
                     )
                 return
         except Exception as e:
@@ -561,9 +563,9 @@ class LoaderMod(loader.Module):
                     __name__,
                     "loaded_repositories",
                     list(
-                        set(self.ctx.db.get(__name__, "loaded_repositories", [])).union(
-                            [repo_url]
-                        )
+                        set(
+                            self.ctx.db.get(__name__, "loaded_repositories", []) or []
+                        ).union([repo_url])
                     ),
                 )
 
@@ -580,7 +582,7 @@ class LoaderMod(loader.Module):
 
         if len(args) == 1:
             repoUrl = args[0]
-            repos = set(self.ctx.db.get(__name__, "loaded_repositories", []))
+            repos = set(self.ctx.db.get(__name__, "loaded_repositories", []) or [])
 
             try:
                 repos.remove(repoUrl)
@@ -653,7 +655,7 @@ class LoaderMod(loader.Module):
                 __name__,
                 "loaded_modules",
                 list(
-                    set(self.ctx.db.get(__name__, "loaded_modules", []))
+                    set(self.ctx.db.get(__name__, "loaded_modules", []) or [])
                     - set(loaded_to_unloaded)
                 ),
             )
@@ -661,7 +663,7 @@ class LoaderMod(loader.Module):
                 __name__,
                 "unloaded_modules",
                 list(
-                    set(self.ctx.db.get(__name__, "unloaded_modules", []))
+                    set(self.ctx.db.get(__name__, "unloaded_modules", []) or [])
                     | set(loaded_to_unloaded)
                 ),
             )
@@ -670,7 +672,7 @@ class LoaderMod(loader.Module):
                 __name__,
                 "unloaded_modules",
                 list(
-                    set(self.ctx.db.get(__name__, "unloaded_modules", []))
+                    set(self.ctx.db.get(__name__, "unloaded_modules", []) or [])
                     - set(unloaded_to_loaded)
                 ),
             )
@@ -678,7 +680,7 @@ class LoaderMod(loader.Module):
                 __name__,
                 "loaded_modules",
                 list(
-                    set(self.ctx.db.get(__name__, "loaded_modules", []))
+                    set(self.ctx.db.get(__name__, "loaded_modules", []) or [])
                     | set(unloaded_to_loaded)
                 ),
             )
@@ -700,7 +702,7 @@ class LoaderMod(loader.Module):
 
         await asyncio.gather(*[self.download_and_install(mod) for mod in todo])
 
-        repos = set(self.ctx.db.get(__name__, "loaded_repositories", []))
+        repos = set(self.ctx.db.get(__name__, "loaded_repositories", []) or [])
 
         await asyncio.gather(*[self.load_repo(get_git_api(url)) for url in repos])
 

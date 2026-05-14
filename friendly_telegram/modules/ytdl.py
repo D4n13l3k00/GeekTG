@@ -224,7 +224,7 @@ class YtDlMod(loader.Module):
         "no_formats": "<b>[YouTube-Dl]</b> No downloadable formats found",
         "pick_kind": (
             "<b>[YouTube-Dl]</b> <b>{title}</b>\n"
-            "👤 <i>{uploader}</i>"
+            "<tg-emoji emoji-id='5373012449597335010'>👤</tg-emoji> <i>{uploader}</i>"
             "{duration}"
             "\n\n<code>{url}</code>\n\nWhat to download?"
         ),
@@ -250,7 +250,7 @@ class YtDlMod(loader.Module):
     # ---------------------------------------------------------------- helpers
 
     def _chats(self) -> List[int]:
-        return self.ctx.db.get(_DB_NAME, "chats", [])
+        return self.ctx.db.get(_DB_NAME, "chats", []) or []
 
     def _save_chats(self, chats: List[int]) -> None:
         self.ctx.db.set(_DB_NAME, "chats", chats)
@@ -429,7 +429,13 @@ class YtDlMod(loader.Module):
             ]
         )
         rows.append(
-            [{"text": "✖ Cancel", "callback": self._inline_cancel, "style": "danger"}]
+            [
+                {
+                    "text": "✖ Cancel",
+                    "callback": self._inline_cancel,
+                    "style": "danger",
+                }
+            ]
         )
         return rows
 
@@ -452,7 +458,10 @@ class YtDlMod(loader.Module):
                     "callback": self._inline_back,
                     "args": (token, reply_id),
                 },
-                {"text": "✖ Cancel", "callback": self._inline_cancel},
+                {
+                    "text": "✖ Cancel",
+                    "callback": self._inline_cancel,
+                },
             ]
         )
         return rows
@@ -488,7 +497,10 @@ class YtDlMod(loader.Module):
                     "callback": self._inline_back,
                     "args": (token, reply_id),
                 },
-                {"text": "✖ Cancel", "callback": self._inline_cancel},
+                {
+                    "text": "✖ Cancel",
+                    "callback": self._inline_cancel,
+                },
             ]
         )
         return rows

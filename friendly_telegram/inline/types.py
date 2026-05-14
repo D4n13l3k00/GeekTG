@@ -203,14 +203,21 @@ async def edit(
     if isinstance(always_allow, list):
         form["always_allow"] = always_allow
     try:
-        await self.bot.edit_message_text(
-            text=text,
-            inline_message_id=inline_message_id or query.inline_message_id,
-            link_preview_options=LinkPreviewOptions(
-                is_disabled=disable_web_page_preview
-            ),
-            reply_markup=self._generate_markup(form_uid),
-        )
+        if form and form.get("photo"):
+            await self.bot.edit_message_caption(
+                caption=text,
+                inline_message_id=inline_message_id or query.inline_message_id,
+                reply_markup=self._generate_markup(form_uid),
+            )
+        else:
+            await self.bot.edit_message_text(
+                text=text,
+                inline_message_id=inline_message_id or query.inline_message_id,
+                link_preview_options=LinkPreviewOptions(
+                    is_disabled=disable_web_page_preview
+                ),
+                reply_markup=self._generate_markup(form_uid),
+            )
     except TelegramRetryAfter as e:
         logger.info(f"Sleeping {e.retry_after}s on aiogram FloodWait...")
         await asyncio.sleep(e.retry_after)

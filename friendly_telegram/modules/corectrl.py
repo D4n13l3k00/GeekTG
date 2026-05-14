@@ -31,32 +31,32 @@ class CoreMod(loader.Module):
 
     strings = {
         "name": "Settings",
-        "too_many_args": "🚫 <b>Too many args</b>",
-        "blacklisted": "✅ <b>Chat {} blacklisted from userbot</b>",
-        "unblacklisted": "✅ <b>Chat {} unblacklisted from userbot</b>",
-        "user_blacklisted": "✅ <b>User {} blacklisted from userbot</b>",
-        "user_unblacklisted": "✅ <b>User {} unblacklisted from userbot</b>",
-        "what_prefix": "❓ <b>What should the prefix be set to?</b>",
-        "prefix_incorrect": "🚫 <b>Prefix must be one symbol in length</b>",
+        "too_many_args": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Too many args</b>",
+        "blacklisted": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Chat {} blacklisted from userbot</b>",
+        "unblacklisted": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Chat {} unblacklisted from userbot</b>",
+        "user_blacklisted": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>User {} blacklisted from userbot</b>",
+        "user_unblacklisted": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>User {} unblacklisted from userbot</b>",
+        "what_prefix": "<tg-emoji emoji-id='5467666648263564704'>❓</tg-emoji> <b>What should the prefix be set to?</b>",
+        "prefix_incorrect": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Prefix must be one symbol in length</b>",
         "prefix_set": (
-            "✅ <b>Command prefix updated.\n"
+            "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Command prefix updated.\n"
             "Type</b> <code>{newprefix}setprefix {oldprefix}</code>"
             "<b>to change it back</b>"
         ),
-        "alias_created": "✅ <b>Alias created. Access it with</b> <code>{}</code>",
+        "alias_created": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Alias created. Access it with</b> <code>{}</code>",
         "aliases": "📋 <b>Aliases:</b>\n",
-        "no_command": "🚫 <b>Command</b> <code>{}</code> <b>does not exist</b>",
-        "alias_args": "🚫 <b>You must provide a command and the alias for it</b>",
-        "delalias_args": "🚫 <b>You must provide the alias name</b>",
-        "alias_removed": "✅ <b>Alias <code>{}</code> removed.</b>",
-        "no_alias": "🚫 <b>Alias <code>{}</code> does not exist</b>",
-        "who_to_unblacklist": "🚫 <b>Specify a user (id or reply)</b>",
-        "no_pack": "❓ <b>What translation pack should be added?</b>",
-        "bad_pack": "🚫 <b>Invalid translation pack specified</b>",
-        "trnsl_saved": "✅ <b>Translation pack added</b>",
-        "packs_cleared": "✅ <b>Translations cleared</b>",
-        "lang_set": "✅ <b>Language changed</b>",
-        "db_cleared": "✅ <b>Database cleared</b>",
+        "no_command": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Command</b> <code>{}</code> <b>does not exist</b>",
+        "alias_args": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>You must provide a command and the alias for it</b>",
+        "delalias_args": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>You must provide the alias name</b>",
+        "alias_removed": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Alias <code>{}</code> removed.</b>",
+        "no_alias": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Alias <code>{}</code> does not exist</b>",
+        "who_to_unblacklist": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Specify a user (id or reply)</b>",
+        "no_pack": "<tg-emoji emoji-id='5467666648263564704'>❓</tg-emoji> <b>What translation pack should be added?</b>",
+        "bad_pack": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Invalid translation pack specified</b>",
+        "trnsl_saved": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Translation pack added</b>",
+        "packs_cleared": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Translations cleared</b>",
+        "lang_set": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Language changed</b>",
+        "db_cleared": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Database cleared</b>",
         "geek": (
             "🕶 <b>Congrats! You are Geek!</b>\n\n"
             "<b>GeekTG version: {}.{}.{}</b>\n"
@@ -66,7 +66,7 @@ class CoreMod(loader.Module):
             "🕶 <b>Congrats! You are Geek!</b>\n\n"
             "<b>GeekTG version: {}.{}.{}beta</b>\n"
             "<b>Branch: beta</b>\n\n"
-            "<i>🔮 You're using the unstable branch (<b>beta</b>). "
+            "<i><tg-emoji emoji-id='5361837567463399422'>🔮</tg-emoji> You're using the unstable branch (<b>beta</b>). "
             "You receive fresh but untested updates. "
             "Report any bugs to @chat_ftg or @hikari_chat</i>"
         ),
@@ -74,7 +74,7 @@ class CoreMod(loader.Module):
             "🕶 <b>Congrats! You are Geek!</b>\n\n"
             "<b>GeekTG version: {}.{}.{}alpha</b>\n"
             "<b>Branch: alpha</b>\n\n"
-            "<i>🔮 You're using <b><u>very</u></b> unstable branch (<b>alpha</b>). "
+            "<i><tg-emoji emoji-id='5361837567463399422'>🔮</tg-emoji> You're using <b><u>very</u></b> unstable branch (<b>alpha</b>). "
             "You receive fresh but untested updates. "
             "You <b><u>can't ask for help, only report bugs</u></b></i>"
         ),
@@ -134,7 +134,7 @@ class CoreMod(loader.Module):
         self.ctx.db.set(
             main.__name__,
             "blacklist_chats",
-            self.ctx.db.get(main.__name__, "blacklist_chats", []) + [chatid],
+            (self.ctx.db.get(main.__name__, "blacklist_chats", []) or []) + [chatid],
         )
 
         await utils.answer(message, self.tr("blacklisted", message).format(chatid))
@@ -147,7 +147,10 @@ class CoreMod(loader.Module):
         self.ctx.db.set(
             main.__name__,
             "blacklist_chats",
-            list(set(self.ctx.db.get(main.__name__, "blacklist_chats", [])) - {chatid}),
+            list(
+                set(self.ctx.db.get(main.__name__, "blacklist_chats", []) or [])
+                - {chatid}
+            ),
         )
 
         await utils.answer(message, self.tr("unblacklisted", message).format(chatid))
@@ -175,7 +178,7 @@ class CoreMod(loader.Module):
         self.ctx.db.set(
             main.__name__,
             "blacklist_users",
-            self.ctx.db.get(main.__name__, "blacklist_users", []) + [user],
+            (self.ctx.db.get(main.__name__, "blacklist_users", []) or []) + [user],
         )
 
         await utils.answer(message, self.tr("user_blacklisted", message).format(user))
@@ -188,7 +191,10 @@ class CoreMod(loader.Module):
         self.ctx.db.set(
             main.__name__,
             "blacklist_users",
-            list(set(self.ctx.db.get(main.__name__, "blacklist_users", [])) - {user}),
+            list(
+                set(self.ctx.db.get(main.__name__, "blacklist_users", []) or [])
+                - {user}
+            ),
         )
 
         await utils.answer(message, self.tr("user_unblacklisted", message).format(user))

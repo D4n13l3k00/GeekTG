@@ -22,7 +22,7 @@ import re
 import time
 from importlib.resources import files  # noqa: F401
 from types import FunctionType  # noqa: F401
-from typing import Any, List, Optional, Union  # noqa: F401
+from typing import Any, List, Optional, Union, cast  # noqa: F401
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -164,7 +164,7 @@ class InlineManager:
 
         return allow
 
-    async def _create_bot(self) -> None:
+    async def _create_bot(self) -> bool:
         # This is called outside of conversation, so we can start the new one
         # We create new bot
         logger.info("User don't have bot, attempting creating new one")
@@ -237,7 +237,7 @@ class InlineManager:
 
     async def _assert_token(
         self, create_new_if_needed=True, revoke_token=False
-    ) -> None:
+    ) -> bool:
         # If the token is set in db
         if self._token:
             # Just return `True`
@@ -252,7 +252,7 @@ class InlineManager:
                 m = await conv.send_message("/token")
             except YouBlockedUserError:
                 # If user banned BotFather, unban him
-                await self._client(UnblockRequest(id="@BotFather"))
+                await self._client(UnblockRequest(id="@BotFather"))  # type: ignore[arg-type]
                 # And resend message
                 m = await conv.send_message("/token")
 
@@ -413,7 +413,7 @@ class InlineManager:
 
     async def _register_manager(
         self, after_break=False, ignore_token_checks=False
-    ) -> None:
+    ) -> Optional[bool]:
         # Get info about user to use it in this class
         me = await self._client.get_me()
         self._me = me.id
@@ -432,7 +432,7 @@ class InlineManager:
 
         # Create bot instance and dispatcher
         self.bot = Bot(
-            token=self._token,
+            token=str(self._token or ""),
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         )
         self._bot = self.bot  # This is a temporary alias so the
@@ -554,7 +554,7 @@ class InlineManager:
         self._cleaner_task.cancel()
 
     def _generate_markup(
-        self, form_uid: Union[str, list], buttons: list = False
+        self, form_uid: Union[str, list], buttons: Optional[list] = None
     ) -> InlineKeyboardMarkup:
         """Generate markup for form"""
         if form_uid:
@@ -578,9 +578,11 @@ class InlineManager:
 
         rows: List[List[InlineKeyboardButton]] = []
         # Bot API 9.4 styling — accepted as extra kwargs on every button.
-        # ``style`` ∈ {"primary","success","danger"}; ``icon_custom_emoji_id``
-        # is a custom-emoji document id. Both are forwarded as-is to aiogram
-        # which validates them server-side.
+        # ``style`` ∈ {"primary","success","danger"}, validated server-side.
+        # ``icon_custom_emoji_id`` is intentionally NOT supported here:
+        # only Telegram-issued premium bots may attach custom emoji to a
+        # button label, and our @BotFather-spawned inline bot can't, so we
+        # don't even try.
         _STYLE_VALUES = {"primary", "success", "danger"}
 
         def _extras(btn: dict) -> dict:
@@ -595,9 +597,6 @@ class InlineManager:
                     )
                 else:
                     out["style"] = style
-            icon = btn.get("icon_custom_emoji_id")
-            if icon is not None:
-                out["icon_custom_emoji_id"] = str(icon)
             return out
 
         for row in buttons:
@@ -686,7 +685,7 @@ class InlineManager:
                         "\n".join(
                             [
                                 line.strip()
-                                for line in inspect.getdoc(fun).splitlines()
+                                for line in (inspect.getdoc(fun) or "").splitlines()
                                 if not line.strip().startswith("@")
                             ]
                         )
@@ -806,8 +805,8 @@ class InlineManager:
                             title="Toss a coin",
                             photo_url=gallery["photo_url"],
                             thumbnail_url=gallery["photo_url"],
-                            caption=caption,
-                            description=caption,
+                            caption=str(caption) if caption else None,
+                            description=str(caption) if caption else None,
                             reply_markup=markup,
                         )
                     ],
@@ -820,14 +819,28 @@ class InlineManager:
             return
 
         form_state = self._forms[query]
+        # Use the form_uid as the result id so ``_chosen_inline_handler``
+        # can map the chosen result back to its form and capture the
+        # ``inline_message_id`` we need for the post-send refresh edit.
+        #
+        # The body itself is sent as a tiny placeholder. The real text is
+        # pushed via ``bot.edit_message_text`` right after the user picks
+        # this result. That detour exists because the Telegram client
+        # caches ``SendInlineBotResultRequest`` output and won't re-render
+        # the message on an "identical" edit — even when the edit would
+        # otherwise materialise the custom-emoji entities. Sending a
+        # different placeholder first guarantees the follow-up edit isn't
+        # rejected as ``MESSAGE_NOT_MODIFIED`` and the client always
+        # repaints with animations.
+        placeholder = "⏳"
         await inline_query.answer(
             (
                 [
                     InlineQueryResultPhoto(
-                        id=rand(20),
+                        id=query,
                         title="GeekTG",
                         photo_url=form_state["photo"],
-                        caption=form_state["text"],
+                        caption=placeholder,
                         reply_markup=self._generate_markup(query),
                         thumbnail_url=form_state["photo"],
                     )
@@ -835,10 +848,10 @@ class InlineManager:
                 if form_state["photo"]
                 else [
                     InlineQueryResultArticle(
-                        id=rand(20),
+                        id=query,
                         title="GeekTG",
                         input_message_content=InputTextMessageContent(
-                            message_text=form_state["text"],
+                            message_text=placeholder,
                             link_preview_options=LinkPreviewOptions(is_disabled=True),
                         ),
                         reply_markup=self._generate_markup(query),
@@ -942,6 +955,19 @@ class InlineManager:
         self, chosen_inline_query: ChosenInlineResult
     ) -> None:
         query = chosen_inline_query.query
+        result_id = chosen_inline_query.result_id
+
+        # When the user actually triggers our inline result, Telegram hands
+        # us its ``inline_message_id`` here. ``form()`` is parked on the
+        # corresponding asyncio.Event waiting for it so it can do its
+        # post-send refresh edit (the only path that keeps custom-emoji
+        # entities; the ``SendInlineBotResultRequest`` path strips them).
+        form = self._forms.get(result_id)
+        if form is not None:
+            form["inline_message_id"] = chosen_inline_query.inline_message_id
+            event = form.get("_chosen_event")
+            if event is not None:
+                event.set()
 
         for form_uid, form in self._forms.copy().items():
             for button in array_sum(form.get("buttons", [])):
@@ -1026,7 +1052,7 @@ class InlineManager:
             if isinstance(reply_markup, dict):
                 reply_markup = [[reply_markup]]
             if isinstance(reply_markup[0], dict):
-                reply_markup = [[_] for _ in reply_markup]
+                reply_markup = cast(List[List[dict]], [[_] for _ in reply_markup])
 
         if reply_markup is None:
             reply_markup = []
@@ -1098,6 +1124,8 @@ class InlineManager:
             "always_allow": always_allow,
             "chat": None,
             "message_id": None,
+            "inline_message_id": None,
+            "_chosen_event": asyncio.Event(),
             "photo": photo,
             "uid": form_uid,
         }
@@ -1137,6 +1165,37 @@ class InlineManager:
         if isinstance(message, Message):
             await message.delete()
 
+        # First-render workaround for animated custom emoji.
+        # ``SendInlineBotResultRequest`` strips MessageEntityCustomEmoji on
+        # the way through, so the very first render is plain — even though
+        # ``editMessageText`` would happily honour them (which is why
+        # ``call.edit`` after a button click renders correctly).
+        # Wait for the chosen_inline_result event (it carries the
+        # ``inline_message_id``) and re-issue the same body via the bot.
+        # One extra RPC, no flicker. Best-effort: non-premium owners and
+        # transient errors get logged but never bubble up.
+        try:
+            event = self._forms[form_uid].get("_chosen_event")
+            if event is not None:
+                await asyncio.wait_for(event.wait(), timeout=5.0)
+            inline_message_id = self._forms[form_uid].get("inline_message_id")
+            if inline_message_id:
+                if photo:
+                    await self.bot.edit_message_caption(
+                        caption=text,
+                        inline_message_id=inline_message_id,
+                        reply_markup=self._generate_markup(form_uid),
+                    )
+                else:
+                    await self.bot.edit_message_text(
+                        text=text,
+                        inline_message_id=inline_message_id,
+                        link_preview_options=LinkPreviewOptions(is_disabled=True),
+                        reply_markup=self._generate_markup(form_uid),
+                    )
+        except Exception:
+            logger.debug("inline.form() post-send refresh failed", exc_info=True)
+
         return form_uid
 
     async def gallery(
@@ -1145,8 +1204,8 @@ class InlineManager:
         message: Union[Message, int],
         next_handler: FunctionType,
         force_me: bool = False,
-        always_allow: bool = False,
-        ttl: int = False,
+        always_allow: Union[bool, list] = False,
+        ttl: Union[int, bool] = False,
     ) -> Union[bool, str]:  # sourcery skip: raise-specific-error
         """
         Processes inline gallery
@@ -1192,8 +1251,9 @@ class InlineManager:
             logger.error("Invalid type for `always_allow`")
             return False
 
-        if not always_allow:
-            always_allow = []
+        always_allow_list: list = (
+            list(always_allow) if isinstance(always_allow, list) else []
+        )
 
         if not isinstance(ttl, int) and ttl:
             logger.error("Invalid type for `ttl`")
@@ -1221,7 +1281,7 @@ class InlineManager:
             "caption": caption,
             "ttl": round(time.time()) + ttl or self._markup_ttl,
             "force_me": force_me,
-            "always_allow": always_allow,
+            "always_allow": always_allow_list,
             "chat": None,
             "message_id": None,
             "uid": gallery_uid,
@@ -1231,16 +1291,14 @@ class InlineManager:
         }
 
         self._custom_map[btn_call_data] = {
-            "handler": asyncio.coroutine(
-                functools.partial(
-                    custom_next_handler,
-                    func=next_handler,
-                    self=self,
-                    btn_call_data=btn_call_data,
-                    caption=caption,
-                )
+            "handler": functools.partial(
+                custom_next_handler,
+                func=next_handler,
+                self=self,
+                btn_call_data=btn_call_data,
+                caption=cast(str, caption),
             ),
-            "always_allow": always_allow,
+            "always_allow": always_allow_list,
             "force_me": force_me,
         }
 

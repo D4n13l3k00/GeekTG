@@ -181,7 +181,10 @@ class GeekConfigMod(loader.Module):
             reply_markup=list(chunks(btns, 2))
             + [
                 [
-                    {"text": "👈 Back", "callback": self.inline__global_config},
+                    {
+                        "text": "👈 Back",
+                        "callback": self.inline__global_config,
+                    },
                     {
                         "text": "🚫 Close",
                         "callback": self.inline__close,
@@ -206,7 +209,14 @@ class GeekConfigMod(loader.Module):
             ]
             for mod_row in chunks(to_config, 3)
         ]
-        kb += [[{"text": "🚫 Close", "callback": self.inline__close}]]
+        kb += [
+            [
+                {
+                    "text": "🚫 Close",
+                    "callback": self.inline__close,
+                }
+            ]
+        ]
 
         if isinstance(call, Message):
             await self.inline.form(self.tr("configure"), reply_markup=kb, message=call)

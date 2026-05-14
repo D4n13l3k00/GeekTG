@@ -594,6 +594,8 @@ async def answer(message, response, **kwargs) -> List[Message]:
     )
     assert parse_mode is not None  # sanitize_parse_mode raises if it can't resolve
 
+    ret: List[Message] = []
+
     if isinstance(response, str) and not kwargs.pop("asfile", False):
         txt, ent = parse_mode.parse(response)  # type: ignore[attr-defined]
 
@@ -623,15 +625,15 @@ async def answer(message, response, **kwargs) -> List[Message]:
         if message.media is None and (
             response.media is None or isinstance(response.media, MessageMediaWebPage)
         ):
-            ret = (
+            ret = [
                 await message.edit(
                     response.message,
                     parse_mode=lambda t: (t, response.entities or []),
                     link_preview=isinstance(response.media, MessageMediaWebPage),
                 ),
-            )
+            ]
         else:
-            ret = (await message.respond(response, **kwargs),)
+            ret = [await message.respond(response, **kwargs)]
     else:
         if isinstance(response, bytes):
             response = io.BytesIO(response)
@@ -643,13 +645,13 @@ async def answer(message, response, **kwargs) -> List[Message]:
             response.name = name
 
         if message.media is not None and edit:
-            await message.edit(file=response, **kwargs)
+            ret = [await message.edit(file=response, **kwargs)]
         else:
             kwargs.setdefault(
                 "reply_to",
                 getattr(message, "reply_to_msg_id", None),
             )
-            ret = (await message.client.send_file(message.chat_id, response, **kwargs),)
+            ret = [await message.client.send_file(message.chat_id, response, **kwargs)]
             # send_file can't replace the original message — if we're
             # answering our own command, the command would otherwise linger
             # in the chat. Mirror the long-text branch above and delete it.

@@ -45,17 +45,17 @@ class HelpMod(loader.Module):
 
     strings = {
         "name": "Help",
-        "bad_module": "🚫 <b>Module <code>{}</code> not found</b>",
+        "bad_module": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Module <code>{}</code> not found</b>",
         "single_mod_header": "📼 <b>{}</b>:",
-        "single_cmd": "\n▫️ <code>{}{}</code> 👉🏻 ",
-        "undoc_cmd": "🦥 No docs",
+        "single_cmd": "\n▫️ <code>{}{}</code> <tg-emoji emoji-id='5471978009449731768'>👉</tg-emoji>🏻 ",
+        "undoc_cmd": "<tg-emoji emoji-id='5226639796645932042'>🦥</tg-emoji> No docs",
         "all_header": "👓 <b>{} mods available, {} hidden:</b>",
         "mod_tmpl": "\n{} <code>{}</code>",
         "first_cmd_tmpl": ": ( {}",
         "cmd_tmpl": " | {}",
-        "no_mod": "🚫 <b>Specify module to hide</b>",
+        "no_mod": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Specify module to hide</b>",
         "hidden_shown": ("👓 <b>{} modules hidden, {} module shown:</b>\n{}\n{}"),
-        "ihandler": "\n🎹 <code>{}</code> 👉🏻 ",
+        "ihandler": "\n<tg-emoji emoji-id='5467398680959023683'>🎹</tg-emoji> <code>{}</code> <tg-emoji emoji-id='5471978009449731768'>👉</tg-emoji>🏻 ",
         "perm_warn": "<i>You have permissions to execute only this commands</i>\n",
         "joined": (
             "👩‍💼 <b>Joined the</b> "
@@ -82,7 +82,7 @@ class HelpMod(loader.Module):
     # ---------------------------------------------------------------- helpers
 
     def _hidden(self) -> list:
-        return self.ctx.db.get(self.strings["name"], "hide", [])
+        return self.ctx.db.get(self.strings["name"], "hide", []) or []
 
     def _set_hidden(self, value) -> None:
         self.ctx.db.set(self.strings["name"], "hide", value)
@@ -209,7 +209,10 @@ class HelpMod(loader.Module):
 
             count += 1
             line = self.tr("mod_tmpl").format(self._bullet(mod), name)
-            tokens = cmds + [f"🎹 {n}" for n in ihs]
+            tokens = cmds + [
+                f"<tg-emoji emoji-id='5467398680959023683'>🎹</tg-emoji> {n}"
+                for n in ihs
+            ]
             for i, tok in enumerate(tokens):
                 tmpl = "first_cmd_tmpl" if i == 0 else "cmd_tmpl"
                 line += self.tr(tmpl).format(tok)
@@ -257,8 +260,14 @@ class HelpMod(loader.Module):
             self.tr("hidden_shown").format(
                 len(added),
                 len(removed),
-                "\n".join(f"👁‍🗨 <i>{m}</i>" for m in added),
-                "\n".join(f"👁 <i>{m}</i>" for m in removed),
+                "\n".join(
+                    f"<tg-emoji emoji-id='5228686859663585439'>👁‍🗨</tg-emoji> <i>{m}</i>"
+                    for m in added
+                ),
+                "\n".join(
+                    f"<tg-emoji emoji-id='5424892643760937442'>👁</tg-emoji> <i>{m}</i>"
+                    for m in removed
+                ),
             ),
         )
 

@@ -28,12 +28,12 @@ class GeekSettingsMod(loader.Module):
 
     strings = {
         "name": "GeekSettings",
-        "watchers": "👀 <b>Watchers:</b>\n\n<b>{}</b>",
-        "mod404": "🚫 <b>Watcher {} not found</b>",
-        "already_disabled": "👀 <b>Watcher {} is already disabled</b>",
-        "disabled": "👀 <b>Watcher {} is now <u>disabled</u></b>",
-        "enabled": "👀 <b>Watcher {} is now <u>enabled</u></b>",
-        "args": "🚫 <b>You need to specify watcher name</b>",
+        "watchers": "<tg-emoji emoji-id='5424885441100782420'>👀</tg-emoji> <b>Watchers:</b>\n\n<b>{}</b>",
+        "mod404": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Watcher {} not found</b>",
+        "already_disabled": "<tg-emoji emoji-id='5424885441100782420'>👀</tg-emoji> <b>Watcher {} is already disabled</b>",
+        "disabled": "<tg-emoji emoji-id='5424885441100782420'>👀</tg-emoji> <b>Watcher {} is now <u>disabled</u></b>",
+        "enabled": "<tg-emoji emoji-id='5424885441100782420'>👀</tg-emoji> <b>Watcher {} is now <u>enabled</u></b>",
+        "args": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>You need to specify watcher name</b>",
         "user_nn": "🔰 <b>NoNick for this user is now {}</b>",
         "no_cmd": "🔰 <b>Please, specify command to toggle NoNick for</b>",
         "cmd_nn": "🔰 <b>NoNick for </b><code>{}</code><b> is now {}</b>",
@@ -41,7 +41,7 @@ class GeekSettingsMod(loader.Module):
         "no_reply": "🔰 <b>Reply to a user's message</b>",
         "inline_settings": "⚙️ <b>Here you can configure your GeekTG settings</b>",
         "confirm_update": "🪂 <b>Please, confirm that you want to update. Your userbot will be restarted</b>",
-        "confirm_restart": "🔄 <b>Please, confirm that you want to restart</b>",
+        "confirm_restart": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> <b>Please, confirm that you want to restart</b>",
     }
 
     def get_watchers(self) -> Tuple[List[str], Dict[str, list]]:
@@ -50,7 +50,7 @@ class GeekSettingsMod(loader.Module):
             for _ in self.allmodules.watchers
             if _.__self__.__class__.strings is not None
         ]
-        disabled = self.ctx.db.get(main.__name__, "disabled_watchers", {})
+        disabled = self.ctx.db.get(main.__name__, "disabled_watchers", {}) or {}
         return names, disabled
 
     async def watcherscmd(self, message: Message) -> None:
@@ -59,7 +59,10 @@ class GeekSettingsMod(loader.Module):
         watchers = [
             f"♻️ {_}" for _ in watchers if _ not in list(disabled_watchers.keys())
         ]
-        watchers += [f"💢 {k} {v}" for k, v in disabled_watchers.items()]
+        watchers += [
+            f"<tg-emoji emoji-id='5467910507916697142'>💢</tg-emoji> {k} {v}"
+            for k, v in disabled_watchers.items()
+        ]
         await utils.answer(message, self.tr("watchers").format("\n".join(watchers)))
 
     async def watcherblcmd(self, message: Message) -> None:
@@ -182,7 +185,7 @@ class GeekSettingsMod(loader.Module):
             return
         u = reply.sender_id
 
-        nn = self.ctx.db.get(main.__name__, "nonickusers", [])
+        nn = self.ctx.db.get(main.__name__, "nonickusers", []) or []
         if u in nn:
             nn = [x for x in nn if x != u]
             await utils.answer(message, self.tr("user_nn").format("off"))
@@ -203,8 +206,8 @@ class GeekSettingsMod(loader.Module):
             await utils.answer(message, self.tr("cmd404"))
             return
 
-        prefix = self.ctx.db.get(main.__name__, "command_prefix", ".")
-        nn = self.ctx.db.get(main.__name__, "nonickcmds", [])
+        prefix = self.ctx.db.get(main.__name__, "command_prefix", ".") or "."
+        nn = self.ctx.db.get(main.__name__, "nonickcmds", []) or []
         if args in nn:
             nn = [x for x in nn if x != args]
             state = "off"
@@ -294,7 +297,7 @@ class GeekSettingsMod(loader.Module):
             call,
             confirm_required=confirm_required,
             confirm_text_key="confirm_restart",
-            accept_label="🔄 Restart",
+            accept_label="<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> Restart",
             accept_callback=self.inline__restart,
             running_text="You userbot is being restarted...",
             command=".restart",
@@ -303,8 +306,13 @@ class GeekSettingsMod(loader.Module):
     def _toggle_button(self, label: str, key: str, default: bool) -> dict:
         """A 2-state inline button that flips db[main][key]."""
         on = self.ctx.db.get(main.__name__, key, default)
+        icon = (
+            "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji>"
+            if on
+            else "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji>"
+        )
         return {
-            "text": f"{'✅' if on else '🚫'} {label}",
+            "text": f"{icon} {label}",
             "callback": self.inline__setting,
             "args": (key, not on),
         }

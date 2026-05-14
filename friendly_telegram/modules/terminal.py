@@ -38,34 +38,47 @@ def _hash_msg(message: Message) -> str:
     return f"{utils.get_chat_id(message)}/{message.id}"
 
 
+_READ_CHUNK = 4096
+_TAIL_BUFFER = 8192
+
+
 async def _read_stream(
     func: Callable[[str], Awaitable[None]],
     stream: asyncio.StreamReader,
     delay: float,
 ) -> None:
-    """Pump ``stream`` byte-by-byte into ``func``, debouncing edits to ``delay``s.
+    """Pump ``stream`` into ``func`` in chunks, emitting edits at most once
+    per ``delay`` seconds.
 
-    The trailing pending edit is flushed once the stream hits EOF so the
-    user doesn't lose the final lines.
+    Only the tail of the output is retained — commands with massive output
+    (``tree``, ``find``, ``cat`` of a large file) drain at pipe speed
+    without quadratic buffer copies or per-byte task churn, and the visible
+    window stays well within Telegram's message limit.
     """
+    data = bytearray()
+    pending: Optional[asyncio.Task] = None
 
-    async def _flush_after(payload: bytes) -> None:
+    async def _flush() -> None:
         await asyncio.sleep(delay)
-        await func(payload.decode("utf-8", errors="replace"))
+        await func(bytes(data).decode("utf-8", errors="replace"))
 
-    last: Optional[asyncio.Task] = None
-    data = b""
-    while True:
-        chunk = await stream.read(1)
-        if not chunk:
-            if last:
-                last.cancel()
-                await func(data.decode("utf-8", errors="replace"))
-            return
-        data += chunk
-        if last:
-            last.cancel()
-        last = asyncio.ensure_future(_flush_after(data))
+    try:
+        while True:
+            chunk = await stream.read(_READ_CHUNK)
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > _TAIL_BUFFER:
+                del data[:-_TAIL_BUFFER]
+            if pending is None or pending.done():
+                pending = asyncio.ensure_future(_flush())
+    finally:
+        if pending is not None and not pending.done():
+            pending.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await pending
+        if data:
+            await func(bytes(data).decode("utf-8", errors="replace"))
 
 
 # ---------------------------------------------------------------- editors
@@ -278,26 +291,26 @@ class TerminalMod(loader.Module):
         "flood_wait_protect_cfg_doc": (
             "How long to wait in seconds between edits in commands"
         ),
-        "what_to_kill": "<b>Reply to a terminal command to terminate it</b>",
-        "kill_fail": "<b>Could not kill process</b>",
-        "killed": "<b>Killed</b>",
-        "no_cmd": "<b>No command is running in that message</b>",
-        "running": "<b>Command:</b> <code>{}</code>",
-        "finished": "\n<b>Code:</b> <code>{}</code>",
-        "stdout": "\n<b>Stdout:</b>\n<code>",
-        "stderr": "</code>\n\n<b>Stderr:</b>\n<code>",
+        "what_to_kill": "<tg-emoji emoji-id='5350460637182993292'>🎯</tg-emoji> <b>Reply to a terminal command to terminate it</b>",
+        "kill_fail": "⚠️ <b>Could not kill process</b>",
+        "killed": "<tg-emoji emoji-id='5370971163310693562'>💀</tg-emoji> <b>Killed</b>",
+        "no_cmd": "<tg-emoji emoji-id='5395517004486551976'>🤷</tg-emoji> <b>No command is running in that message</b>",
+        "running": "<tg-emoji emoji-id='5445284980978621387'>🚀</tg-emoji> <b>Command:</b> <code>{}</code>",
+        "finished": "\n<tg-emoji emoji-id='5411520005386806155'>🏁</tg-emoji> <b>Code:</b> <code>{}</code>",
+        "stdout": "\n<tg-emoji emoji-id='5433614747381538714'>📤</tg-emoji> <b>Stdout:</b>\n<code>",
+        "stderr": "</code>\n\n<tg-emoji emoji-id='5433811242135331842'>📥</tg-emoji> <b>Stderr:</b>\n<code>",
         "end": "</code>",
-        "auth_failed": "<b>Authentication failed, please try again</b>",
+        "auth_failed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Authentication failed, please try again</b>",
         "auth_needed": (
-            '<a href="tg://user?id={}">Interactive authentication required</a>'
+            '<tg-emoji emoji-id="5472308992514464048">🔐</tg-emoji> <a href="tg://user?id={}">Interactive authentication required</a>'
         ),
         "auth_msg": (
-            "<b>Please edit this message to the password for</b> "
+            "<tg-emoji emoji-id='5330115548900501467'>🔑</tg-emoji> <b>Please edit this message to the password for</b> "
             "<code>{}</code> <b>to run</b> <code>{}</code>"
         ),
-        "auth_locked": "<b>Authentication failed, please try again later</b>",
-        "auth_ongoing": "<b>Authenticating...</b>",
-        "done": "<b>Done</b>",
+        "auth_locked": "<tg-emoji emoji-id='5296369303661067030'>🔒</tg-emoji> <b>Authentication failed, please try again later</b>",
+        "auth_ongoing": "⏳ <b>Authenticating...</b>",
+        "done": "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Done</b>",
     }
 
     def __init__(self) -> None:
