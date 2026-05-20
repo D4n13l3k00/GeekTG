@@ -4,14 +4,12 @@ Requires the ``media`` extra (pydub, numpy) plus aiohttp and audioop-lts.
 Install with: pip install pydub numpy aiohttp audioop-lts
 """
 
-# pyright: reportMissingImports=false
-
 import io
 import logging
 import math
 import re
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional, Union
+from typing import Awaitable, Callable, Optional, Union, cast
 
 import numpy as np
 from pydub import AudioSegment, effects
@@ -91,7 +89,9 @@ class AudioEditorMod(loader.Module):
         if hasattr(out, "__await__"):
             out = await out  # type: ignore[assignment]
         fs = round(ctx.duration * duration_factor) if duration_factor != 1.0 else None
-        await self._send_audio(ctx, out, title or ctx.pref, fs=fs, fmt=fmt)
+        await self._send_audio(
+            ctx, cast(AudioSegment, out), title or ctx.pref, fs=fs, fmt=fmt
+        )
 
     def _parse_level(
         self, args: Optional[str], default: float, label: str
@@ -122,7 +122,7 @@ class AudioEditorMod(loader.Module):
             cutoff = int(
                 round((3 * np.std(samples) / math.sqrt(2) - np.mean(samples)) * 0.005)
             )
-            return audio.overlay(audio.low_pass_filter(cutoff) + lvl)
+            return audio.overlay(audio.low_pass_filter(cutoff) + lvl)  # type: ignore[attr-defined]
 
         await self._apply(message, "BassBoost", _bass, title=f"BassBoost {lvl}lvl")
 
@@ -238,7 +238,7 @@ class AudioEditorMod(loader.Module):
         end = int(match["end"]) if match["end"] else 0
 
         def _cut(a: AudioSegment) -> AudioSegment:
-            return a[start : end or len(a) - 1]
+            return cast(AudioSegment, a[start : end or len(a) - 1])
 
         await self._apply(message, "Cut", _cut)
 
