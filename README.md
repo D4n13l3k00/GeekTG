@@ -1,252 +1,154 @@
-# GeekTG · Friendly Telegram, refreshed
+<div align="center">
 
-[🇷🇺 Русская версия](README.ru.md)
+# GeekTG · Рефорк Friendly Telegram (от GeekTG)
 
+[🇬🇧 English version](README.en.md)
 
-A Telegram **userbot** with an inline-bot companion, a tiny web UI for first-time
-setup, and a pluggable third-party module system.
+[![Python](https://img.shields.io/badge/python-3.10%20%E2%80%93%203.14-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Version](https://img.shields.io/badge/version-4.4.1-informational)](https://github.com/D4n13l3k00/GeekTG/releases)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
+[![Telethon](https://img.shields.io/badge/telethon-1.40%2B-blue?logo=telegram&logoColor=white)](https://github.com/LonamiWebs/Telethon)
+[![uv](https://img.shields.io/badge/uv-ready-blueviolet?logo=astral)](https://github.com/astral-sh/uv)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000)](https://github.com/psf/black)
 
-Originally based on
-[friendly-telegram/friendly-telegram](https://github.com/friendly-telegram/friendly-telegram),
-forked by GeekTG, then frozen for a couple of years. I picked the codebase up
-because it still beats most modern alternatives at *being a userbot*: small,
-hackable, no telemetry, no SaaS — and brought it back to life on top of the
-2026 Python toolchain.
+</div>
 
-> ⚠️ Userbots violate Telegram's ToS. Run them on a number you can afford to
-> lose. Don't use the default API credentials in production — get your own at
+> ⚠️ Юзерботы нарушают ToS Telegram. Запускай на номере, который не жалко
+> потерять. Не используй дефолтные API-ключи в проде — получи свои на
 > [my.telegram.org/apps](https://my.telegram.org/apps).
 
----
+Telegram-**юзербот** с inline-ботом, маленьким веб-интерфейсом
+для первичной настройки и системой сторонних модулей.
 
-## What changed in this refresh
-
-Nothing user-visible was rewritten — the module API, the inline manager, the
-security/rate-limit decorators, the dispatcher are all intact. **Third-party
-modules keep working** thanks to a shim that exposes the package under the
-historic ``friendly-telegram`` name.
-
-What did change:
-
-- 🐍 **Python** packaging on `pyproject.toml` (hatchling) instead of the old
-  bash installer / `requirements.txt`. Builds a normal wheel, ships an `gtg`
-  console script.
-- 📦 **`uv` / `pipx` install** — one command, no manual venvs, no system pip
-  needed (we bootstrap it lazily for third-party modules that bring their own
-  deps).
-- 🪪 **Telethon 1.40+** (upstream, not the Mod fork) with a current
-  Pixel/Android device fingerprint so Telegram delivers login codes reliably.
-- 🗂 **Local-only storage** — config, sessions, modules and assets live under
-  `~/.local/share/friendly-telegram/` (XDG-compliant). The cloud channels
-  (`friendly-<uid>-data`, `friendly-<uid>-assets`) are gone — no more rogue
-  channels in your chat list, no Telegram-flood-wait on every config write.
-- 🌐 **Web UI rewritten** — clean two-step wizard in Russian, animated aurora
-  background, dark SweetAlerts, profile card on the dashboard with
-  masked phone (`+7********10`) and a "Open Saved Messages" button.
-- 🛡 **Graceful Ctrl-C / SIGTERM** — no more 20-line tracebacks on shutdown.
-- 🧹 **Removed**: Heroku/Okteto deploy paths, install.sh / install.ps1,
-  `meval`-based Python eval (still around as a module, but the ambient one is
-  gone), git-based self-update (replaced with a stub pointing at
-  `uv tool upgrade`).
-- 🩹 **Quality fixes** — circular import broken, `asyncio.run()` instead of
-  `get_event_loop()`, hot-path `SuperList` lookup no longer rebuilds closures
-  on every attribute access, `on_unload` tasks held by strong refs so they
-  don't get GC'd mid-flight, structured logging defaults.
-
-Full notes: [`CHANGELOG`](docs/) (forthcoming) — for now `git log` is the
-authoritative source.
+Изначально основан на
+[friendly-telegram/friendly-telegram](https://github.com/friendly-telegram/friendly-telegram),
+форкнут командой GeekTG ([GeekTG/Friednly-Telegram](https://github.com/GeekTG/Friednly-Telegram)), потом был заброшег из-за потери интереса команды. За основну взял последний и обновил под новые зависимости и реалии.
 
 ---
 
-## Install
+## 🔀 Что изменилось в этом форке
 
-### Option A — `uv` (recommended)
+API модулей немного изменился (старые поддерживаются), можно ознакомиться в [документации](/docs/).
+Так же документация доступна в [GitHub Pages](https://d4n13l3k00.github.io/GeekTG)
 
-```sh
-uv tool install git+https://github.com/D4n13l3k00/GeekTG
+**Что поменялось?** Да многое: обновлен веб, добавлена поддержка анимированных смайлов,
+добавлена типизация для Pylance. А самое главное что бота можно установить через uv как пакет и
+будет полная поддержка тайпингов для создания своих модулей!
+
+---
+
+## 📦 Установка
+
+### Вариант A — `uv` (рекомендуется)
+
+```bash
+uv tool install git+https://github.com/D4n13l3k00/GeekTG # --python 3.13 к примеру для установки конкретной версии
 gtg
 ```
 
-`uv` is a single-binary Python toolchain — installer at
-[astral.sh/uv](https://astral.sh/uv). It pins the exact Python version, builds
-the wheel and isolates dependencies. Upgrades are `uv tool upgrade gtg`.
+`uv` — однофайловый Python-тулчейн, инсталлер на
+[astral.sh/uv](https://astral.sh/uv). Фиксирует точную версию Python, собирает
+wheel и изолирует зависимости. Обновление — `uv tool upgrade gtg`.
 
-### Option B — `pipx`
+### Вариант B — Из исходников
 
-```sh
-pipx install git+https://github.com/D4n13l3k00/GeekTG
-gtg
-```
-
-### Option C — Docker / Compose
-
-```sh
-docker compose up -d --build
-docker compose logs -f gtg
-```
-
-The provided [`docker-compose.yml`](docker-compose.yml) mounts a named volume
-at the data directory so sessions survive `docker compose down`.
-
-### Option D — From source
-
-```sh
+```bash
 git clone https://github.com/D4n13l3k00/GeekTG
-cd Friendly-Telegram
+cd GeekTG
 uv sync
 uv run gtg
 ```
 
----
+### Вариант C — Docker / Compose
 
-## First run
-
-```sh
-gtg
+```bash
+docker compose up -d --build
+docker compose logs -f gtg
 ```
 
-Prints a startup banner with the resolved data directory, then opens a small
-web wizard on a free local port. The URL is shown on stdout — for example:
+[`docker-compose.yml`](docker-compose.yml) монтирует именованный том на data-директорию, чтобы сессии переживали `docker compose down`.
 
-```text
+---
+
+## 🚀 Первый запуск
+
+Выводит баннер с data-директорией и открывает веб-мастер на свободном порту:
+
+```yaml
 🌐 Web UI is ready. Open one of:
-  • http://localhost:8888       (this machine only)
-  • http://192.168.1.42:8888    (local network)
-  • http://203.0.113.7:8888     (public — make sure port is open)
+  • http://localhost:8888       (только эта машина)
+  • http://192.168.1.42:8888    (локальная сеть)
+  • http://203.0.113.7:8888     (публично — проверь, что порт открыт)
 ```
 
-The wizard walks you through:
+Мастер проведёт через:
 
-1. **API keys** — get them at [my.telegram.org/apps](https://my.telegram.org/apps).
-2. **Phone number** — international format, e.g. `+79991234567`.
-3. **Confirmation code** — Telegram delivers it to *another logged-in
-   Telegram session* if you have one (in the chat with “Telegram”), otherwise
-   via SMS.
-4. **2FA password** if your account has cloud password enabled.
+1. **API-ключи** — получить на [my.telegram.org/apps](https://my.telegram.org/apps).
+2. **Номер телефона** — международный формат, например `+79991234567`.
+3. **Код подтверждения** — приходит в другой залогиненный сеанс Telegram (чат «Telegram»), иначе по SMS.
+4. **Пароль 2FA**, если включён.
 
-After that, the dashboard shows your profile and a single button to open
-*Saved Messages* (your chat-with-self) in Telegram so you can start running
-commands like `.help`, `.info`, `.loadmod`.
+После этого дашборд показывает профиль и кнопку открыть *Избранное* — там вводить команды вроде `.help`, `.info`, `.loadmod`.
 
 ---
 
-## Useful CLI flags
+## ⚙️ CLI-флаги
 
-| Flag | What |
-| ---- | ---- |
-| `gtg --print-data-dir` | Print the resolved data directory and exit |
-| `gtg --data-root /path` | Override the data directory for this run |
-| `gtg --platform "My VPS"` | Override platform name shown in `.info` (also `$GTG_PLATFORM`) |
-| `gtg --port 8888` | Pin the web port (random free port by default) |
-| `gtg --no-web` | Skip the web UI; configure via terminal |
-| `gtg --no-inline` | Disable the inline-bot companion |
-| `gtg --root` / `-R` | Allow running as `root` (don't, unless in a container) |
-| `gtg --setup` | Re-enter the configurator with the existing session |
+| Флаг | Что делает |
+| ---- | ---------- |
+| `gtg --print-data-dir` | Напечатать data-директорию и выйти |
+| `gtg --data-root /path` | Переопределить data-директорию |
+| `gtg --platform "My VPS"` | Переопределить имя платформы в `.info` (или `$GTG_PLATFORM`) |
+| `gtg --port 8888` | Зафиксировать порт веб-UI (по умолчанию — случайный) |
+| `gtg --no-web` | Без веб-UI |
+| `gtg --no-inline` | Отключить inline-бота |
+| `gtg --root` / `-R` | Разрешить запуск от `root` (только для контейнеров) |
+| `gtg --setup` | Войти в конфигуратор с уже существующей сессией |
 
-Full list: `gtg --help`.
+Полный список — `gtg --help`.
 
 ---
 
-## Where everything lives
+## 📁 Где что лежит
 
-Default data root is `$XDG_DATA_HOME/friendly-telegram` (typically
-`~/.local/share/friendly-telegram`). Override with `$GTG_DATA_DIR` or
-`--data-root`.
+Data-root по умолчанию — `~/.local/share/friendly-telegram` (`$XDG_DATA_HOME/friendly-telegram`). Переопределить через `$GTG_DATA_DIR` или `--data-root`.
 
-```text
+```shell
 ~/.local/share/friendly-telegram/
-├── config.json                      # global + per-user app config
+├── config.json                      # глобальный + per-user конфиг
 ├── api_token.txt                    # api_id / api_hash
-├── config-<user_id>.json            # per-account module DB (was the cloud channel)
+├── config-<user_id>.json            # БД модулей на аккаунт
 ├── friendly-telegram-+7…1234.session
-├── loaded_modules/                  # third-party .py modules saved by .loadmod
-└── assets/<user_id>/                # binary blobs stored by store_asset()
+├── loaded_modules/                  # сторонние .py, загруженные через .loadmod
+└── assets/<user_id>/                # бинарные блобы из store_asset()
 ```
 
-Backup = `tar czf gtg.tgz ~/.local/share/friendly-telegram/`. Restore =
-extract on the new host, run `gtg`. No Telegram-side state to migrate.
+Бэкап и восстановление доступны прямо в веб-UI. Либо вручную: `tar czf gtg.tgz ~/.local/share/friendly-telegram/` — распаковать на новом хосте и запустить `gtg`.
 
 ---
 
-## Inline bot
+## 🧩 Написание модулей
 
-`InlineManager` registers an inline-mode bot via `@BotFather` automatically on
-first run, used by core/third-party modules for inline buttons, galleries and
-forms. To use your own bot instead:
-
-```text
-.setbottoken 123456789:AA…
-.restart
-```
-
-Other commands: `.bottoken` (show current bot, token redacted),
-`.resetbottoken` (clear and recreate on next start).
+См. [документацию](https://d4n13l3k00.github.io/GeekTG/modules/).
 
 ---
 
-## Writing modules
+## 🗺️ Статус и roadmap
 
-Modules are plain `.py` files; the loader picks up classes whose names end
-with `Mod` and inherit from `friendly_telegram.loader.Module`. The historic
-package alias is preserved, so existing modules with `from .. import loader,
-utils` keep working.
+Это maintenance/modernization-форк. Цели по порядку:
 
-Minimal example:
+1. ✅ Поднять установку и запуск на Python 3.10 – 3.14.
+2. ✅ Выпилить внешние зависимости, которых больше нет (Heroku, Okteto, Telethon-Mod).
+3. ✅ Локальное хранилище, дружелюбный первый запуск.
+4. ✅ Лучший DX для авторов модулей — type hints по всему core, ruff/black/isort через pre-commit, `inline.py` разбит на `inline/`.
+5. 🟡 Настоящий self-update для wheel-инсталлов (сейчас заглушка, отсылающая к `uv tool upgrade`).
+6. ✅ Документация — двуязычные доки под [`docs/`](docs/), сайт на MkDocs Material, деплой на [d4n13l3k00.github.io/GeekTG](https://d4n13l3k00.github.io/GeekTG/) на push в `master`.
 
-```python
-# requires: pillow
-from telethon.tl.custom import Message
-from .. import loader, utils
-
-@loader.tds
-class HelloMod(loader.Module):
-    """Friendly hello."""
-
-    strings = {
-        "name": "Hello",
-        "hi": "👋 <b>Hello, {}!</b>",
-    }
-
-    @loader.unrestricted
-    async def hicmd(self, message: Message):
-        """Say hi."""
-        await utils.answer(message, self.tr("hi", message).format(
-            (await message.client.get_me()).first_name,
-        ))
-```
-
-Drop it in `~/.local/share/friendly-telegram/loaded_modules/HelloMod.py`
-(or load via `.loadmod` from a URL/file). The `# requires: pillow` directive
-auto-installs missing pip dependencies into the active environment — works
-in `uv tool` venvs that don't ship pip.
+Issues и PR приветствуются. Если после обновления сломался сторонний модуль — открой issue с трейсбэком.
 
 ---
 
-## Status & roadmap
+## 📄 Лицензия
 
-This is a maintenance / modernization fork. Goals, in order:
-
-1. ✅ Make it install and boot on Python 3.9 – 3.13 (done).
-2. ✅ Drop external dependencies that no longer exist (Heroku, Okteto, Telethon-Mod).
-3. ✅ Local-only data store, friendlier first-run experience.
-4. ✅ Better module developer UX — type hints across core, ruff/black/isort
-   wired via pre-commit, `inline.py` split into `inline/`. (`dispatcher.py`
-   is still a single ~430-line file but it's flat and readable; splitting
-   isn't urgent.)
-5. 🟡 Real self-update path that works for wheel installs (currently a stub
-   pointing at `uv tool upgrade`).
-6. ✅ Documentation refresh — bilingual (en/ru) docs under [`docs/`](docs/),
-   MkDocs Material site auto-built from `mkdocs.yml`, deployed to
-   <https://d4n13l3k00.github.io/GeekTG/> on push to `master`.
-
-Issues and PRs welcome. If you maintained a third-party FTG module and
-something broke after this refresh, open an issue with a stack trace —
-backwards compatibility is a hard goal, not a soft one.
-
----
-
-## License
-
-GNU AGPL v3 — see [`LICENSE`](LICENSE).
-Originally Copyright © 2018-2022 The Friendly-Telegram Authors, modded by the
-GeekTG team, refresh by the current maintainer.
+GNU AGPL v3 — см. [`LICENSE`](LICENSE).
+Изначально Copyright © 2018-2022 The Friendly-Telegram Authors, форкнут командой GeekTG, рефреш — текущим мейнтейнером.
