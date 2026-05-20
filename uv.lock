@@ -164,15 +164,15 @@ wheels = [
 
 [[package]]
 name = "aiohttp-jinja2"
-version = "1.5.1"
+version = "1.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "jinja2" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/4c/fadbfcc1269fa79e69fcdb29027840ab022a91471a5aeaa8fd8b27cc5406/aiohttp-jinja2-1.5.1.tar.gz", hash = "sha256:8d149b2a57d91f794b33a394ea5bc66b567f38c74a5a6a9477afc2450f105c01", size = 52741, upload-time = "2023-02-01T16:12:02.464Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/39/da5a94dd89b1af7241fb7fc99ae4e73505b5f898b540b6aba6dc7afe600e/aiohttp-jinja2-1.6.tar.gz", hash = "sha256:a3a7ff5264e5bca52e8ae547bbfd0761b72495230d438d05b6c0915be619b0e2", size = 53057, upload-time = "2023-11-18T15:30:52.559Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cc/01/77172427a6e5321e20114fe0dcacd5fdbd5f48595dda840d6a9e1a2e3a78/aiohttp_jinja2-1.5.1-py3-none-any.whl", hash = "sha256:45cf00b80ab4dcc19515df13a929826eeb9698e76a3bcfd99112418751f5a061", size = 11639, upload-time = "2023-02-01T16:12:00.214Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/90/65238d4246307195411b87a07d03539049819b022c01bcc773826f600138/aiohttp_jinja2-1.6-py3-none-any.whl", hash = "sha256:0df405ee6ad1b58e5a068a105407dc7dcc1704544c559f1938babde954f945c7", size = 11736, upload-time = "2023-11-18T15:30:50.743Z" },
 ]
 
 [[package]]
@@ -557,7 +557,7 @@ wheels = [
 
 [[package]]
 name = "friendly-telegram"
-version = "4.4.1"
+version = "4.4.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiogram" },
@@ -608,37 +608,37 @@ media = [
 [package.metadata]
 requires-dist = [
     { name = "aiogram", specifier = ">=3.28.2" },
-    { name = "aiohttp", specifier = ">=3.10" },
-    { name = "aiohttp-jinja2", specifier = ">=1.5" },
-    { name = "audioop-lts", marker = "python_full_version >= '3.13'", specifier = ">=0.2.1" },
+    { name = "aiohttp", specifier = ">=3.13.5" },
+    { name = "aiohttp-jinja2", specifier = ">=1.6" },
+    { name = "audioop-lts", marker = "python_full_version >= '3.13'", specifier = ">=0.2.2" },
     { name = "audioop-lts", marker = "python_full_version >= '3.13' and extra == 'media'" },
-    { name = "babel", specifier = ">=2.9.1" },
+    { name = "babel", specifier = ">=2.18.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=26.5.1" },
     { name = "black", marker = "extra == 'docs'", specifier = ">=26.5.1" },
     { name = "ffmpeg-python", marker = "extra == 'media'" },
     { name = "gitpython", specifier = ">=3.1.50" },
-    { name = "httpx", specifier = ">=0.27" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=8.0.1" },
-    { name = "jinja2", specifier = ">=3.1.2" },
-    { name = "legacy-cgi", marker = "python_full_version >= '3.13'", specifier = ">=2.6" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "legacy-cgi", marker = "python_full_version >= '3.13'", specifier = ">=2.6.4" },
     { name = "meval", specifier = ">=2.5" },
-    { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
-    { name = "mkdocs-static-i18n", marker = "extra == 'docs'", specifier = ">=1.2" },
+    { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6.1" },
+    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.7.6" },
+    { name = "mkdocs-static-i18n", marker = "extra == 'docs'", specifier = ">=1.3.1" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=1.0.4" },
     { name = "moviepy", marker = "extra == 'media'" },
     { name = "numpy", marker = "extra == 'media'" },
     { name = "pillow", marker = "extra == 'media'" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.6.0" },
-    { name = "psutil", marker = "sys_platform != 'android'", specifier = ">=5.9" },
+    { name = "psutil", marker = "sys_platform != 'android'", specifier = ">=7.2.2" },
     { name = "pydub", marker = "extra == 'media'" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.3.0" },
-    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.12" },
+    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.15.1" },
     { name = "pythondialog", specifier = ">=3.5.3" },
     { name = "requests", specifier = ">=2.34.2" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.13" },
-    { name = "telethon", specifier = ">=1.40,<2" },
+    { name = "telethon", specifier = ">=1.43.2" },
     { name = "wand", marker = "extra == 'media'" },
     { name = "yt-dlp", specifier = ">=2026.3.17" },
 ]
