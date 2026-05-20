@@ -606,7 +606,9 @@ def _render_overview(snap: Dict[str, Any]) -> str:
         f"<tg-emoji emoji-id='5431449001532594346'>⚡</tg-emoji> <b>CPU:</b> {cpu_line}"
     )
     lines.append(f"💾 <b>RAM:</b> {mem_line}")
-    lines.append(f"📀 <b>Disk:</b> {disk_line}")
+    lines.append(
+        f"<tg-emoji emoji-id='5215352343419167936'>📀</tg-emoji> <b>Disk:</b> {disk_line}"
+    )
     return "\n".join(lines)
 
 
@@ -684,10 +686,10 @@ def _render_memory(snap: Dict[str, Any]) -> str:
 def _render_disk(snap: Dict[str, Any]) -> str:
     disk = snap["disk"]
     if not disk:
-        return "📀 <b>Disk</b>\n<code>unavailable</code>"
+        return "<tg-emoji emoji-id='5215352343419167936'>📀</tg-emoji> <b>Disk</b>\n<code>unavailable</code>"
     pct = disk.get("percent", 0.0) or 0.0
     return (
-        "📀 <b>Disk</b>\n"
+        "<tg-emoji emoji-id='5215352343419167936'>📀</tg-emoji> <b>Disk</b>\n"
         f"<tg-emoji emoji-id='5431721976769027887'>📂</tg-emoji> <b>Path:</b> <code>{utils.escape_html(disk.get('path') or '/')}</code>\n"
         f"<tg-emoji emoji-id='5431577498364158238'>📊</tg-emoji> {_bar(pct)} <code>{pct:.1f}%</code>\n"
         f"📦 <b>Used:</b> <code>{_human_bytes(disk.get('used'))}</code>\n"
@@ -775,7 +777,7 @@ class SysInfoMod(loader.Module):
         "name": "SysInfo",
         "footer": "\n\n🕓 <i>Updated: <code>{ts}</code></i>",
         "psutil_missing": (
-            "\n\n⚠️ <i>psutil not installed — using /proc fallbacks.</i>"
+            "\n\n<tg-emoji emoji-id='5213205860498549992'>⚠️</tg-emoji> <i>psutil not installed — using /proc fallbacks.</i>"
         ),
         "title_overview": "🖥 Overview",
         "title_cpu": "⚡ CPU",

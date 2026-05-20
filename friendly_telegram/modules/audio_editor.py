@@ -4,6 +4,7 @@ Requires the ``media`` extra (pydub, numpy) plus aiohttp and audioop-lts.
 Install with: pip install pydub numpy aiohttp audioop-lts
 """
 
+import inspect
 import io
 import logging
 import math
@@ -86,7 +87,7 @@ class AudioEditorMod(loader.Module):
         if not ctx:
             return
         out = transform(ctx.audio)
-        if hasattr(out, "__await__"):
+        if inspect.isawaitable(out):
             out = await out  # type: ignore[assignment]
         fs = round(ctx.duration * duration_factor) if duration_factor != 1.0 else None
         await self._send_audio(
@@ -99,8 +100,10 @@ class AudioEditorMod(loader.Module):
         """Return parsed float level in (1, 100], or None on bad input."""
         if not args:
             return default
-        if _LEVEL_RE.match(args) and 1.0 < float(args) < 100.1:
-            return float(args)
+        if _LEVEL_RE.match(args):
+            val = float(args)
+            if 1.0 < val < 100.1:
+                return val
         return None
 
     # ------------------------------------------------------------------ commands
@@ -147,10 +150,9 @@ class AudioEditorMod(loader.Module):
 
         def _echo(audio: AudioSegment) -> AudioSegment:
             out = audio
-            offset = 200
-            for _ in range(5):
-                out = out.overlay(audio - 10, position=offset)
-                offset += 200
+            quieter = audio - 10
+            for i in range(5):
+                out = out.overlay(quieter, position=200 * (i + 1))
             return out
 
         await self._apply(message, "Echo", _echo)
@@ -246,14 +248,13 @@ class AudioEditorMod(loader.Module):
 
     async def _get_audio(self, message: Message, pref: str) -> Optional[_AudioCtx]:
         reply = await message.get_reply_message()
-        if not (reply and reply.file and reply.file.mime_type):
+        if not (
+            reply and reply.file and reply.file.mime_type
+        ) or reply.file.mime_type.split("/", 1)[0] not in ("audio", "video"):
             await utils.answer(message, self.tr("reply", message).format(pref))
             return None
 
         kind = reply.file.mime_type.split("/", 1)[0]
-        if kind not in ("audio", "video"):
-            await utils.answer(message, self.tr("reply", message).format(pref))
-            return None
 
         document = reply.document
         attrs = getattr(document, "attributes", []) or []
@@ -293,7 +294,7 @@ class AudioEditorMod(loader.Module):
         fs: Optional[int] = None,
         fmt: str = "mp3",
     ) -> None:
-        if ctx.voice:
+        if ctx.voice and out.channels > 1:
             out = out.split_to_mono()[0]
 
         out_file = io.BytesIO()

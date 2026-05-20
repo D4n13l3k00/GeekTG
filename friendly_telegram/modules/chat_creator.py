@@ -85,7 +85,7 @@ class ChatCreatorMod(loader.Module):
         # inline
         "inline_pick": "<tg-emoji emoji-id='5431736674147114227'>🗂</tg-emoji> <b>What do you want to create?</b>",
         "inline_title_prompt": (
-            "✏️ <b>Send a title for the new {type}</b>\n\n"
+            "<tg-emoji emoji-id='5334673106202010226'>✏️</tg-emoji> <b>Send a title for the new {type}</b>\n\n"
             "<tg-emoji emoji-id='5397782960512444700'>📌</tg-emoji> <b>Current title:</b> <code>{title}</code>"
         ),
         # Shown in the inline-switch placeholder (no HTML rendering there).
@@ -97,8 +97,6 @@ class ChatCreatorMod(loader.Module):
         "btn_custom": "✏️ Enter title",
         "btn_back": "⬅️ Back",
         "btn_close": "🚫 Close",
-        "cancelled": "<tg-emoji emoji-id='5226660202035554522'>✖️</tg-emoji> <b>Cancelled.</b>",
-        "closed": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Closed.</b>",
     }
 
     # ------------------------------------------------------------------ commands

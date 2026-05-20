@@ -292,7 +292,7 @@ class TerminalMod(loader.Module):
             "How long to wait in seconds between edits in commands"
         ),
         "what_to_kill": "<tg-emoji emoji-id='5350460637182993292'>🎯</tg-emoji> <b>Reply to a terminal command to terminate it</b>",
-        "kill_fail": "⚠️ <b>Could not kill process</b>",
+        "kill_fail": "<tg-emoji emoji-id='5213205860498549992'>⚠️</tg-emoji> <b>Could not kill process</b>",
         "killed": "<tg-emoji emoji-id='5370971163310693562'>💀</tg-emoji> <b>Killed</b>",
         "no_cmd": "<tg-emoji emoji-id='5395517004486551976'>🤷</tg-emoji> <b>No command is running in that message</b>",
         "running": "<tg-emoji emoji-id='5445284980978621387'>🚀</tg-emoji> <b>Command:</b> <code>{}</code>",
