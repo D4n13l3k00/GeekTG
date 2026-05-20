@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "friendly-telegram"
-version = "4.4.0"
+version = "4.4.1"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
 # aiohttp 3.10 has no Python 3.14 wheels yet — bump the upper bound when
 # they ship. aiogram 3.x itself is happy on 3.13.
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.10,<3.15"
 authors = [{ name = "GeekTG Team" }]
 keywords = ["telegram", "userbot", "telethon"]
 classifiers = [
@@ -23,7 +23,7 @@ classifiers = [
 dependencies = [
     "Telethon>=1.40,<2",
     "pythondialog>=3.5.3",
-    "gitpython>=3.1.27",
+    "gitpython>=3.1.50",
     "babel>=2.9.1",
     "meval>=2.5",
     "aiohttp_jinja2>=1.5",
@@ -32,14 +32,15 @@ dependencies = [
     "httpx>=0.27",
     # kept for compatibility with third-party custom modules that still
     # `import requests` — core no longer uses it.
-    "requests>=2.28.0",
-    "aiogram>=3.13,<4",
-    "yt-dlp>=2025.1",
+    "requests>=2.34.2",
+    "aiogram>=3.28.2",
+    "yt-dlp>=2026.3.17",
     # psutil source build fails on Termux (Android) — keep it as a soft
     # runtime dep; the only consumer (web/status.py) probes for it via
     # ``_try_psutil()`` and degrades to "stats unavailable" when missing.
     'psutil>=5.9; sys_platform != "android"',
     "audioop-lts>=0.2.1; python_version>='3.13'",
+    "legacy-cgi>=2.6; python_version>='3.13'",
 ]
 
 # Heavy media-processing libraries that many third-party modules pull in
@@ -58,25 +59,25 @@ media = [
     "audioop-lts; python_version>='3.13'",
 ]
 dev = [
-    "pytest>=8",
-    "pytest-asyncio>=0.23",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
     "pytest-mock>=3.12",
-    "pre-commit>=3.7",
-    "ruff>=0.9",
-    "black>=25",
-    "isort>=6",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.13",
+    "black>=26.5.1",
+    "isort>=8.0.1",
 ]
 docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.27",
+    "mkdocstrings[python]>=1.0.4",
     "mkdocs-static-i18n>=1.2",
-    "black>=25",
+    "black>=26.5.1",
 ]
 
 [tool.black]
 line-length = 88
-target-version = ["py39"]
+target-version = ["py310"]
 
 [tool.isort]
 profile = "black"
@@ -84,7 +85,7 @@ known_first_party = ["friendly_telegram"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 # Conservative defaults — pyflakes + a subset of pycodestyle. Don't fight
