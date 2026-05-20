@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "friendly-telegram"
-version = "4.4.1"
+version = "4.4.2"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
@@ -21,15 +21,15 @@ classifiers = [
 ]
 
 dependencies = [
-    "Telethon>=1.40,<2",
+    "Telethon>=1.43.2",
     "pythondialog>=3.5.3",
     "gitpython>=3.1.50",
-    "babel>=2.9.1",
+    "babel>=2.18.0",
     "meval>=2.5",
-    "aiohttp_jinja2>=1.5",
-    "aiohttp>=3.10",
-    "Jinja2>=3.1.2",
-    "httpx>=0.27",
+    "aiohttp_jinja2>=1.6",
+    "aiohttp>=3.13.5",
+    "Jinja2>=3.1.6",
+    "httpx>=0.28.1",
     # kept for compatibility with third-party custom modules that still
     # `import requests` — core no longer uses it.
     "requests>=2.34.2",
@@ -38,9 +38,9 @@ dependencies = [
     # psutil source build fails on Termux (Android) — keep it as a soft
     # runtime dep; the only consumer (web/status.py) probes for it via
     # ``_try_psutil()`` and degrades to "stats unavailable" when missing.
-    'psutil>=5.9; sys_platform != "android"',
-    "audioop-lts>=0.2.1; python_version>='3.13'",
-    "legacy-cgi>=2.6; python_version>='3.13'",
+    'psutil>=7.2.2; sys_platform != "android"',
+    "audioop-lts>=0.2.2; python_version>='3.13'",
+    "legacy-cgi>=2.6.4; python_version>='3.13'",
 ]
 
 # Heavy media-processing libraries that many third-party modules pull in
@@ -61,17 +61,17 @@ media = [
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
-    "pytest-mock>=3.12",
+    "pytest-mock>=3.15.1",
     "pre-commit>=4.6.0",
     "ruff>=0.15.13",
     "black>=26.5.1",
     "isort>=8.0.1",
 ]
 docs = [
-    "mkdocs>=1.6",
-    "mkdocs-material>=9.5",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
     "mkdocstrings[python]>=1.0.4",
-    "mkdocs-static-i18n>=1.2",
+    "mkdocs-static-i18n>=1.3.1",
     "black>=26.5.1",
 ]
 
