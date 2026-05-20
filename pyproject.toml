@@ -4,13 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "friendly-telegram"
-version = "4.4.2"
+version = "4.4.3"
 description = "GeekTG-flavoured Friendly Telegram userbot"
 readme = "README.md"
 license = { text = "AGPL-3.0-or-later" }
-# aiohttp 3.10 has no Python 3.14 wheels yet — bump the upper bound when
-# they ship. aiogram 3.x itself is happy on 3.13.
-requires-python = ">=3.10,<3.15"
+# numpy 2.x and other heavy deps require Python 3.11+.
+requires-python = ">=3.11,<3.15"
 authors = [{ name = "GeekTG Team" }]
 keywords = ["telegram", "userbot", "telethon"]
 classifiers = [
@@ -41,6 +40,11 @@ dependencies = [
     'psutil>=7.2.2; sys_platform != "android"',
     "audioop-lts>=0.2.2; python_version>='3.13'",
     "legacy-cgi>=2.6.4; python_version>='3.13'",
+    "numpy>=2.4.6",
+    "Pillow",
+    "pydub",
+    "ffmpeg-python",
+    "audioop-lts; python_version>='3.13'",
 ]
 
 # Heavy media-processing libraries that many third-party modules pull in
@@ -50,13 +54,8 @@ dependencies = [
 #      entrypoint's `uv sync --frozen` no longer wipes them on every boot.
 [project.optional-dependencies]
 media = [
-    "Pillow",
-    "pydub",
-    "ffmpeg-python",
     "wand",
     "moviepy",
-    "numpy",
-    "audioop-lts; python_version>='3.13'",
 ]
 dev = [
     "pytest>=9.0.3",
@@ -77,7 +76,7 @@ docs = [
 
 [tool.black]
 line-length = 88
-target-version = ["py310"]
+target-version = ["py311"]
 
 [tool.isort]
 profile = "black"
@@ -85,7 +84,7 @@ known_first_party = ["friendly_telegram"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 # Conservative defaults — pyflakes + a subset of pycodestyle. Don't fight
