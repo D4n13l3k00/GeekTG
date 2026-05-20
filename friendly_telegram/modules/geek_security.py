@@ -70,7 +70,7 @@ class GeekSecurityMod(loader.Module):
         "not_a_user": "<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Specified entity is not a user</b>",
         "li": '⦿ <b><a href="tg://user?id={}">{}</a></b>',
         "warning": (
-            '⚠️ <b>Please, confirm, that you want to add <a href="tg://user?id={}">{}</a> '
+            '<tg-emoji emoji-id="5213205860498549992">⚠️</tg-emoji> <b>Please, confirm, that you want to add <a href="tg://user?id={}">{}</a> '
             "to group </b><code>{}</code><b>!\n"
             "This action may reveal personal info and grant "
             "full or partial access to userbot to this user</b>"

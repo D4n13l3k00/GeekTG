@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 _LOG_LEVELS = [
     ("🚨 Critical", logging.CRITICAL),
     ("🚫 Error", logging.ERROR),
-    ("⚠️ Warning", logging.WARNING),
+    ("<tg-emoji emoji-id='5213205860498549992'>⚠️</tg-emoji> Warning", logging.WARNING),
     ("ℹ️ Info", logging.INFO),
     ("🧑‍💻 Debug", logging.DEBUG),
     ("👁 All", 0),
@@ -63,11 +63,11 @@ class TestMod(loader.Module):
         "suspended": "<tg-emoji emoji-id='5372892693024218813'>🥶</tg-emoji> <b>Bot suspended for</b> <code>{}</code> <b>seconds</b>",
         "results_ping": "⏱ <b>Ping:</b> <code>{}</code> <b>ms</b>",
         "confidential": (
-            "⚠️ <b>Log level </b><code>{}</code><b> "
+            "<tg-emoji emoji-id='5213205860498549992'>⚠️</tg-emoji> <b>Log level </b><code>{}</code><b> "
             "may reveal your confidential info, be careful</b>"
         ),
         "confidential_text": (
-            "⚠️ <b>Log level </b><code>{0}</code><b> "
+            "<tg-emoji emoji-id='5213205860498549992'>⚠️</tg-emoji> <b>Log level </b><code>{0}</code><b> "
             "may reveal your confidential info, be careful</b>\n"
             "<b>Type </b>"
             "<code>.logs {0} force_insecure</code>"

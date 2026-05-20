@@ -64,7 +64,7 @@ class GeekInfoMod(loader.Module):
             logger.debug("git status check failed", exc_info=True)
             return ""
         if diff:
-            return "⚠️ <b>Update required:</b> <code>.update</code>"
+            return "<tg-emoji emoji-id='5213205860498549992'>⚠️</tg-emoji> <b>Update required:</b> <code>.update</code>"
         return (
             "<tg-emoji emoji-id='5427009714745517609'>✅</tg-emoji> <b>Up-to-date</b>"
         )

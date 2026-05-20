@@ -484,7 +484,7 @@ wheels = [
 
 [[package]]
 name = "friendly-telegram"
-version = "4.4.3"
+version = "4.4.4"
 source = { editable = "." }
 dependencies = [
     { name = "aiogram" },

@@ -5,7 +5,7 @@
 [🇷🇺 Russian version](README.md)
 
 [![Python](https://img.shields.io/badge/python-3.11%20%E2%80%93%203.14-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-4.4.3-informational)](https://github.com/D4n13l3k00/GeekTG/releases)
+[![Version](https://img.shields.io/badge/version-4.4.4-informational)](https://github.com/D4n13l3k00/GeekTG/releases)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Telethon](https://img.shields.io/badge/telethon-1.40%2B-blue?logo=telegram&logoColor=white)](https://github.com/LonamiWebs/Telethon)
 [![uv](https://img.shields.io/badge/uv-ready-blueviolet?logo=astral)](https://github.com/astral-sh/uv)

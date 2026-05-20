@@ -46,7 +46,7 @@ class PythonMod(loader.Module):
         "eval": "<tg-emoji emoji-id='5375464961822695044'>🎬</tg-emoji> <b>Code:</b>\n<code>{}</code>\n<tg-emoji emoji-id='5260426225599405269'>🪄</tg-emoji> <b>Result:</b>\n<code>{}</code>",
         "err": "<tg-emoji emoji-id='5375464961822695044'>🎬</tg-emoji> <b>Code:</b>\n<code>{}</code>\n\n<tg-emoji emoji-id='5240241223632954241'>🚫</tg-emoji> <b>Error:</b>\n<code>{}</code>",
         "db_permission": (
-            "⚠️ <b>Do not use </b><code>db.set</code><b>,"
+            "<tg-emoji emoji-id='5213205860498549992'>⚠️</tg-emoji> <b>Do not use </b><code>db.set</code><b>,"
             "</b><code>db.get</code><b> and other db operations."
             "You have core modules to control anything you want</b>\n\n"
             "<i>Theses commands may <b><u>crash</u></b> your userbot "

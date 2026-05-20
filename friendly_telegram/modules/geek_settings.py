@@ -39,7 +39,7 @@ class GeekSettingsMod(loader.Module):
         "cmd_nn": "🔰 <b>NoNick for </b><code>{}</code><b> is now {}</b>",
         "cmd404": "🔰 <b>Command not found</b>",
         "no_reply": "🔰 <b>Reply to a user's message</b>",
-        "inline_settings": "⚙️ <b>Here you can configure your GeekTG settings</b>",
+        "inline_settings": '<tg-emoji emoji-id="5818705028424141605">⚙️</tg-emoji> <b>Here you can configure your GeekTG settings</b>',
         "confirm_update": "🪂 <b>Please, confirm that you want to update. Your userbot will be restarted</b>",
         "confirm_restart": "<tg-emoji emoji-id='5264727218734524899'>🔄</tg-emoji> <b>Please, confirm that you want to restart</b>",
     }
